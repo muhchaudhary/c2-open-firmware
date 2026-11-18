@@ -23,7 +23,7 @@ our firmware too: it talks to the receiver over its own link protocol.
 
   | | USB ID | Interfaces |
   |---|---|---|
-  | no pad | `1209:0001` "C2 receiver" | debug log + a HID interface with only the vendor collection: not a controller |
+  | no pad | `3537:0575` "C2 receiver" (stock's ID with no pad) | debug log + a HID interface with only the vendor collection: not a controller |
   | pad in Steam mode | `2E8A:10C6` "GameSir C2 receiver" | SInput gamepad (+ the vendor collection) + debug log |
   | pad in Xbox mode | `3537:100B` "Xbox 360 Controller for Windows" | XInput (stock's receiver ID and Microsoft OS descriptors) + debug log |
   | pad in DS4 mode | `054C:09CC` "Sony Interactive Entertainment Wireless Controller" | a DualShock 4 as the pad is on its cable (`docs/ds4.md`; + the vendor collection, its `0F 17 55 88` also on the OUT endpoint) + debug log |

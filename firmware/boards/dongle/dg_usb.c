@@ -19,7 +19,7 @@
  *      reports hosts read at the connect (GET_REPORT, the pad's address from
  *      its hello). The host's output -> the pad's SInput commands.
  *    A mode change re-enumerates (dg_usb_poll, the app task).
- *  - No pad connected: no gamepad at all. The device is then 1209:0001 "C2
+ *  - No pad connected: no gamepad at all. The device is then 3537:0575 "C2
  *    receiver", the log plus a HID interface with only the vendor
  *    collection (`0F 17 55 88` still works), so no host takes it for a
  *    controller. The pad's first word (its hello, or an SInput pad's
@@ -58,8 +58,8 @@
 #define DG_USB_VID          0x2E8A          /* SInput (SDL picks its driver by VID / PID), as the pad on USB */
 #define DG_USB_PID          0x10C6
 #define DG_USB_BCD          0x0100
-#define DG_IDLE_VID         0x1209          /* no pad: pid.codes test ID, as the pad's log alone (gp_usb.c) */
-#define DG_IDLE_PID         0x0001
+#define DG_IDLE_VID         0x3537          /* no pad: stock's receiver ID with no pad (docs/dongle.md) */
+#define DG_IDLE_PID         0x0575
 #define DG_IDLE_NAME        "C2 receiver"
 #define DG_HID_MAXP         64
 
@@ -672,7 +672,7 @@ u32 gp_usb_setup(struct usb_device_t *usb_device, struct usb_ctrlrequest *req)
 
 static const char *dg_proto_name(int p)
 {
-    return p == DG_PROTO_IDLE ? "no pad: no gamepad (1209:0001)" :
+    return p == DG_PROTO_IDLE ? "no pad: no gamepad (3537:0575)" :
            p == GP_PROTO_XINPUT ? "XInput gamepad (Xbox 360, 3537:100B)" :
            p == GP_PROTO_DS4 ? "DS4 gamepad (DualShock 4, 054C:09CC)" : "SInput gamepad (2E8A:10C6)";
 }

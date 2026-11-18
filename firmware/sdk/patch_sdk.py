@@ -332,7 +332,7 @@ patch('apps/hid/modules/power/app_power_manage.c',
 
 # --- USB device descriptor and strings: core/gp_usb.c provides them, so the
 #     IDs follow the mode (the gamepad's VID/PID, or the debug log's
-#     1209:0001 in charging mode). The SDK's fixed ones are renamed away (its
+#     3537:01AB in charging mode). The SDK's fixed ones are renamed away (its
 #     tables stay: get_device_info_to_ota reads them). ------------------------
 DESC = 'apps/common/device/usb/device/descriptor.c'
 patch(DESC,

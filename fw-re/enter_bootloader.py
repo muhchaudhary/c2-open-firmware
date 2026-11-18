@@ -3,7 +3,7 @@
 Sends the command GameSir Connect's C2 handler uses for reqQuickUpdate
 (getQuickUpdateCommand = [0x0F, 0x17, 0x55, 0x88]), padded to the 64-byte output
 report 0x0F of the vendor (0xFFF0) interface. ([0x0F, 0xFC] does not work on the C2.)
-Also finds the receiver's firmware (1209:0001 in stage A / B, 2E8A:10C6 from stage C,
+Also finds the receiver's firmware (3537:0575 with no pad, 2E8A:10C6 with one,
 054C:09CC in DS4 mode; docs/dongle.md): the 0x0F report is what is checked, so the pad's own SInput is not hit. The stock
 receiver (3537:0575 / 100B) only obeys it while a stock pad is linked.
 
@@ -25,8 +25,7 @@ def candidates():
     for h in sorted(glob.glob('/sys/class/hidraw/hidraw*')):
         uevent = open(os.path.join(h, 'device/uevent')).read()
         ds4 = 'HID_ID=0003:0000054C:000009CC' in uevent   # DS4 mode: only the receiver has the 0x0F report
-        if not ds4 and not any(i in uevent for i in ('HID_ID=0003:00003537', 'HID_ID=0003:00001209:00000001',
-                                                     'HID_ID=0003:00002E8A:000010C6')):
+        if not ds4 and not any(i in uevent for i in ('HID_ID=0003:00003537', 'HID_ID=0003:00002E8A:000010C6')):
             continue
         if OUT_REPORT_0F in open(os.path.join(h, 'device/report_descriptor'), 'rb').read():
             name = next((l[9:] for l in uevent.splitlines() if l.startswith('HID_NAME=')), '')

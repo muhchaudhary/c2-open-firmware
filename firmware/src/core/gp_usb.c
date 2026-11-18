@@ -20,8 +20,8 @@
  * The device descriptor and strings come from here too (patch_sdk.py
  * renames the SDK's fixed ones), so the IDs follow the mode: SInput's (SDL
  * picks its driver by VID/PID), the 360 pad's, the DS4's (hid-playstation
- * and SDL match 054C:09CC), or the debug log's pid.codes test ID 1209:0001
- * when it is alone (charging mode). */
+ * and SDL match 054C:09CC), or GameSir's 3537:01AB for the debug log alone
+ * (charging mode). */
 #include "system/includes.h"
 #include "app_config.h"
 #include "usb/device/usb_stack.h"
@@ -38,8 +38,13 @@
 #include "gp_log.h"
 
 #define GP_USB_MAXP         64          /* SInput: report ID + 63 bytes */
-#define GP_USB_LOG_VID      0x1209      /* pid.codes test ID: the debug log alone */
-#define GP_USB_LOG_PID      0x0001
+/* The debug log alone (charging mode): one of the pad's own GameSir IDs,
+ * from stock v3.56's device table (0x1E5D024; which stock mode used it isn't
+ * known). Stock never enumerates with the log alone, so there is no exact
+ * original. This mode has no HID interface, so no gamepad driver binds to
+ * it, and its bcdDevice (GP_PNP_VERSION) differs from stock's 0x0356. */
+#define GP_USB_LOG_VID      0x3537
+#define GP_USB_LOG_PID      0x01AB
 /* Xbox mode as stock: GameSir's VID with the C2 (hall triggers) wired
  * PID (stock v3.56's device table, 0x1E5D07E; GameSir Connect lists it as
  * the pad's wired ID) and the name stock's Xbox mode gives (its dongle,

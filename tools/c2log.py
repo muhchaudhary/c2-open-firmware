@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """c2log.py: read the C2's USB debug log (firmware/, a USB serial port: the
-wired gamepad 2E8A:10C6, or 1209:0001 when it is the log alone).
+wired gamepad 2E8A:10C6, or the log alone: the pad 3537:01AB, the idle
+receiver 3537:0575).
 
   tools/c2log.py [--target pad|receiver] [--device /dev/ttyACMn] [--out FILE]
   tools/c2log.py --boot   --target pad|receiver   enter the USB bootloader
@@ -26,13 +27,14 @@ import sys
 import termios
 import time
 
-# The debug log's USB IDs: log alone (charging mode, idle receiver), SInput
+# The debug log's USB IDs: log alone (the pad charging 3537:01AB, the
+# receiver with no pad 3537:0575), SInput
 # gamepad + log, the Xbox modes: the pad wired 3537:1053, the receiver
 # 3537:100B (both shown as "Xbox 360 Controller for Windows"), and DS4 mode:
 # 054C:09CC "Wireless Controller" on both, told apart by the receiver's
 # vendor collection (output report 0x0F) in its HID report descriptor.
-IDS = {('1209', '0001'), ('2e8a', '10c6'), ('3537', '1053'), ('3537', '100b'), ('054c', '09cc')}
-RECEIVER_IDS = {('3537', '100b')}
+IDS = {('3537', '01ab'), ('3537', '0575'), ('2e8a', '10c6'), ('3537', '1053'), ('3537', '100b'), ('054c', '09cc')}
+RECEIVER_IDS = {('3537', '100b'), ('3537', '0575')}
 DS4_IDS = {('054c', '09cc')}
 OUT_REPORT_0F = bytes.fromhex('850f0922953f9102')  # the vendor collection's output report 0x0F
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -108,7 +110,7 @@ def command(dev, cmd):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    ap.add_argument('--device', help='tty (default: find 2E8A:10C6 or 1209:0001)')
+    ap.add_argument('--device', help='tty (default: find the debug log by its USB IDs)')
     ap.add_argument('--target', choices=('pad', 'receiver'), help='which device (by USB product string)')
     ap.add_argument('--out', default=os.path.join(ROOT, 'firmware/build/c2log.txt'))
     ap.add_argument('--boot', action='store_true', help='enter the USB bootloader')
@@ -120,7 +122,7 @@ def main():
         if not dev:
             ports = find_ports(a.target)
             if not ports:
-                sys.exit(f'{a.target or "C2"} debug log port not found (2E8A:10C6 / 1209:0001): USB connected, firmware/ image?')
+                sys.exit(f'{a.target or "C2"} debug log port not found: USB connected, firmware/ image?')
             if len(ports) > 1:
                 sys.exit('more than one debug log port: ' + ', '.join(f'{t} ({k}: {n})' for t, k, n in ports)
                          + '; pick one with --target pad|receiver')
@@ -143,7 +145,7 @@ def main():
         dev = a.device or find_port(a.target)
         if not dev or not os.path.exists(dev):
             if not waiting_said:
-                emit('--- waiting for the controller (USB serial 2E8A:10C6 / 1209:0001)')
+                emit('--- waiting for the controller (its USB debug log)')
                 waiting_said = True
             time.sleep(0.2)
             continue

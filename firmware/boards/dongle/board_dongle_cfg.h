@@ -15,8 +15,8 @@
 #define CONFIG_DONGLE_FW                        /* DONGLE: the receiver app (boards/dongle/dg_*.c) */
 #define GP_PRODUCT_NAME     "C2 receiver"       /* DONGLE */
 #define GP_VENDOR_NAME      "GameSir"
-#define GP_PNP_VID          0x1209              /* DONGLE: its own test ID, not the pad's SInput one */
-#define GP_PNP_PID          0x0001
+#define GP_PNP_VID          0x3537              /* DONGLE: stock's receiver ID (its Bluetooth Device ID), */
+#define GP_PNP_PID          0x0575              /* not the pad's SInput one */
 #define GP_PNP_VERSION      0x0100
 #define GP_BATTERY_ADC_CH   AD_CH_VBAT          /* DONGLE: no battery. Divider 0: the patched */
 #define GP_BATTERY_DIVIDER  0                   /* get_vbat_level() then always says 4.20 V, so the
