@@ -91,16 +91,71 @@ including the user calibration at 0x8010 / 0x8026, reads 0xFF: hosts take
 the factory one. Stock's Bluetooth and USB report descriptors are byte for
 byte a real one's, and the firmware's are the same.
 
-## Not done yet
+## Future work
 
-- **USB pairing** (subcommand `01` with the console's address and link
-  key): stock does it ("write bt switch link key"). Wired play may not
-  need it; to be seen on a console.
-- **Switch 2 wake-up** (stock replays a saved BLE advertisement:
-  `docs/stock-features.md`).
-- **NFC / IR** (amiibo): none on the C2.
-- **ABXY by label** (stock has an "ABXY swap in Switch" setting): only by
-  position for now.
+Roughly in order: what a console needs first, then what stock has, then
+polish. Stock's strings for each: `docs/stock-features.md`, "Nintendo
+Switch and Switch 2".
+
+**On a console (not tried yet)**
+
+- **A Switch 1 and a Switch 2.** Pairing (*Change Grip/Order*),
+  reconnecting after the console sleeps, *Test Input Devices*, *Calibrate
+  Control Sticks*, motion, rumble, each over Bluetooth, the cable and the
+  receiver. Everything so far is tested on Linux only. Things a console
+  might mind and Linux doesn't:
+  - the 15 ms report rate on Bluetooth;
+  - the composite USB device: the debug log's CDC interface next to the
+    gamepad. If the console refuses it, drop the log in this mode;
+  - the receiver's bcdDevice 0x0210 (a real one: 0x0200);
+  - the made-up firmware version (4.33) in device info;
+  - SPI reads past stock's page answering FF.
+- **USB pairing** (subcommand `01`): plugged in, the console sends its
+  Bluetooth address and a link key so the pad can reconnect wirelessly
+  after. Ours only acks it. Stock stores both ("set switch bt addr",
+  "write bt switch link key"; VM 2 and 8). Needs: the steps' reply formats,
+  then the address and key written into Switch mode's bonds (VM 220..240).
+  It decides whether a pad first plugged into a console reconnects to it
+  over Bluetooth.
+- **Waking a sleeping Switch 1** with Home: the pad pages the console as on
+  any reconnect. Stock has its own path ("switch wakeup send l2cap hid
+  connect req", VM 19 `SwitchWakeupConnectFlagBuf`). To be checked on a
+  console first.
+- **Switch 2 wake-up.** Stock "studies" the console's BLE advertisement
+  (scanned, filtered by company ID, saved), then replays it to wake a
+  sleeping Switch 2 and connects over Classic. Needs BLE, which this
+  build has off (`apps/hid`), the advertisement's format (stock's
+  `rx switch2 host adv report:report_type,company_id,len`), and room for
+  it in the store.
+
+**Stock features still missing**
+
+- **ABXY by label**: stock's "ABXY swap in Switch", M + A held 2 s in its
+  manual. Ours is by position only; a setting (per profile, or per mode)
+  and the combo (`docs/plan.md` 4.4).
+- **Keeping the console's stick calibration**: SPI writes (subcommand
+  `11`) are acked and dropped, so *Calibrate Control Sticks* doesn't last.
+  Keep the user calibration (sticks 0x8010..0x8025, IMU 0x8026..0x8039) in the pad's store and answer
+  reads from it.
+- **The USB "enc" mode** stock has (`USB_SWITCH ENC`, `switch enc mode`):
+  an encrypted wired handshake, not decoded. Possibly for the console's
+  wired licensed-pad path; to look at only if the plain Pro Controller on
+  the cable isn't enough on a console.
+
+**Polish**
+
+- **HD rumble** loses its frequencies (the ERMs have none) and the
+  per-side split when both sides rumble. Encodings other than the one SDL
+  and `hid-nintendo` send are untested.
+- **Digital ZL / ZR** at a quarter of the travel, fixed: a setting.
+- **Home's LED** pattern (subcommand `38`) is acked and ignored: Home
+  stays red. **IMU sensitivity** (`41`) is ignored: the ranges are fixed.
+- **A serial number** at SPI 0x6000 (FF now) and **the pad's real
+  colours** at 0x6050 (black body, white buttons, from stock).
+- **Paddles**: no Pro Controller button, so dead unless remapped; a
+  per-mode default map (`docs/plan.md` 4.1).
+- **NFC / IR** (amiibo): none on the C2. Subcommands `21` / `22` are
+  answered so the console doesn't stall, nothing more.
 
 ## Testing it
 
