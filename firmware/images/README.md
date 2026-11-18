@@ -45,6 +45,17 @@ What each image added, newest first; "tested" means on the pad or receiver.
 
 ### The pad (`C2_pad.flash.bin`)
 
+- **0.3.0** (2026-11-18): Switch mode (Home + Y held 3 s, Home red): a
+  Switch Pro Controller `057E:2009` over Bluetooth ("Pro Controller", its
+  own address and pairings) and USB ("Nintendo Co., Ltd. Pro Controller")
+  (`docs/switch.md`). The USB handshake, subcommands, stock's SPI page,
+  the 0x30 state with the IMU, HD rumble by band (low: the big motor,
+  high: the small one), player lights. The mode combos and colours now
+  match GameSir's manual: Home + Y Switch, Home + A Steam (Home yellow,
+  was white), Home + X Xbox, Home + B DS4. In Switch mode the low-battery
+  warning is a dark blink on Home. Tested on Linux over Bluetooth and
+  USB (`hid-nintendo`, SDL `testcontroller`: inputs, low / high rumble,
+  the gyro's directions). Not yet on a Switch console.
 - **0.2.2** (2026-11-18): the first public release, and the first built
   reproducibly (the release workflow rebuilds it byte for byte). With only
   the debug log on USB (charging mode) the pad is now `3537:01AB` "Cyclone 2
@@ -105,6 +116,13 @@ What each image added, newest first; "tested" means on the pad or receiver.
 
 ### The receiver (`C2_receiver.flash.bin`)
 
+- **0.3.0** (2026-11-18): with the pad in Switch mode, a Pro Controller on
+  USB (`057E:2009`, bcdDevice 0x0210 to tell it from the pad's cable):
+  the receiver answers the handshake and subcommands itself and builds
+  the 0x30 reports from the pad's link state; rumble and player lights
+  go to the pad. Only the Pro Controller's report descriptor (no vendor
+  collection) in this mode. Tested on Linux (SDL `testcontroller`:
+  inputs, low / high rumble).
 - **0.2.2** (2026-11-18): the first public release, built reproducibly.
   With no pad linked it is now `3537:0575` "C2 receiver" (stock's ID in that
   state), not `1209:0001`; its Bluetooth Device ID too. No other change
