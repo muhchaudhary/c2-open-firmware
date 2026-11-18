@@ -6,7 +6,8 @@ USB data lines for a key (`0x16EF`, sent bit-serially: one line the clock,
 the other the data) at every boot; if it sees it, it acknowledges by holding
 both lines low for 1–2 ms, skips the firmware and comes up as the JieLi
 bootloader (`4c4a:2342`). The Mega sends that key. Background:
-`fw-re/jl-uboot-tool/docs/how-to-enter-uboot.md` (it contradicts itself on
+jl-uboot-tool's [`docs/how-to-enter-uboot.md`](https://github.com/kagaimiq/jl-uboot-tool/blob/adb3f18889e88ac512ce0a3c4d8cc3d3cb30696a/docs/how-to-enter-uboot.md)
+(fetched to `fw-re/jl-uboot-tool/docs/`; it contradicts itself on
 which line is the clock and gives no bit rate, so the sketch rotates through
 both line orders and several speeds).
 

@@ -10,6 +10,9 @@ logs/
 
 fw-re/jl-toolchain/
 
+# the flasher's engine: fetched, not kept here (flake.nix, fw-re/get-uboot-tool.sh)
+fw-re/jl-uboot-tool
+
 # firmware build output (firmware/build.sh): image, ELF, make log, debug log
 firmware/build/
 firmware/test/build/

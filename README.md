@@ -106,7 +106,7 @@ The stock firmware, for reference:
 │   ├── mkufw.py  jl.py  flash.py  ufw.py    image tools (the builder is firmware/mkimage.py)
 │   ├── get-toolchain.sh        the JieLi toolchain, hash-checked (without Nix; the dev shell has it)
 │   ├── sdk/                    reverse-engineering tools (sdkmatch, pin and register scans)
-│   └── jl-uboot-tool/          vendored JieLi uboot flasher, pruned to BR23 (own LICENSE)
+│   └── get-uboot-tool.sh       the flasher's engine, kagaimiq's jl-uboot-tool (MIT), pinned (without Nix)
 └── tools/usbkey-mega2560/  the ROM's USB key, for a controller whose firmware doesn't boot
 ```
 
@@ -123,10 +123,13 @@ sudo fw-re/jlflash.sh enter [pad|receiver]  # only enter the bootloader (4c4a:23
 sudo IMG_ADDR=0 LEN=0x100000 fw-re/jlflash.sh read c2_full_backup.bin   # whole-chip backup
 ```
 
-It needs a Python with `pyyaml crcmod pycryptodomex tqdm` at `fw-re/.jlpy`
-(gitignored). The dev shell links it there (`nix develop` once, or direnv),
-so `sudo`, which drops the shell's PATH, still finds it. Without Nix: a
-virtualenv with those four packages at `fw-re/.jlpy`.
+It needs two things, both gitignored: kagaimiq's
+[jl-uboot-tool](https://github.com/kagaimiq/jl-uboot-tool) (MIT, the
+flasher's engine) at `fw-re/jl-uboot-tool`, and a Python with `pyyaml
+crcmod pycryptodomex tqdm` at `fw-re/.jlpy`. The dev shell links both
+there (`nix develop` once, or direnv), so `sudo`, which drops the shell's
+PATH, still finds them. Without Nix: `fw-re/get-uboot-tool.sh` (the same
+pinned commit) and a virtualenv with those four packages at `fw-re/.jlpy`.
 
 From this firmware, `write` gets into the bootloader through the debug log;
 from GameSir's, hold Home + Options and plug in USB. `write` only takes a

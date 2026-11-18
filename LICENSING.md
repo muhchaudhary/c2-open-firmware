@@ -18,13 +18,16 @@ so tools and GameSir Connect see the same device, and the firmware presents
 other vendors' USB IDs where hosts pick their driver by them (Sony's in DS4
 mode, `firmware/src/core/gp_ds4.h`; the SInput ID, `firmware/boards/c2/board_c2_cfg.h`).
 
-Nothing from `tools/` or `fw-re/` goes into the images. `fw-re/jl-uboot-tool`
-(the flasher) is MIT, its own `LICENSE`.
+Nothing from `tools/` or `fw-re/` goes into the images. The flasher's
+engine, kagaimiq's [jl-uboot-tool](https://github.com/kagaimiq/jl-uboot-tool)
+(MIT), isn't in this repository: `flake.nix` and `fw-re/get-uboot-tool.sh`
+fetch it at a pinned commit. It carries JieLi's USB loader blob, which the
+flasher sends to the chip's RAM; JieLi gives no licence for that blob, so
+we don't redistribute it.
 
 ## Our own code
 
 Apache-2.0 (`LICENSE`), the same as the SDK it builds on: everything in this
-repository unless a directory says otherwise (`fw-re/jl-uboot-tool`: MIT).
-The pad's board file started from the SDK's example (`firmware/boards/c2/board_c2.c`)
-and stay under the SDK's Apache-2.0. Released images carry this file and
+repository. The pad's board file started from the SDK's example
+(`firmware/boards/c2/board_c2.c`) and stays under the SDK's Apache-2.0. Released images carry this file and
 `LICENSES/Apache-2.0.txt`, as Apache-2.0 section 4 asks.

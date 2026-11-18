@@ -42,7 +42,10 @@ DONGLE_NAME=GS_C2_Dongle DONGLE_ADDR=0x10000 DONGLE_LEN=0x51000 DONGLE_FULL=0x80
 DONGLE_APP_ADDR=0x11000 DONGLE_APP_END=0x60000   # the app area; 0x60000: the installer record's sector
 MKIMAGE=$HERE/../firmware/mkimage.py DONGLE_LAYOUT=$HERE/../firmware/boards/dongle/image.json
 CHK_ADDR= APP_IMG=0   # set by need_image: the chip header to check; an app-area image
-jlt(){ ( cd "$TOOLDIR" && "$HERE/.jlpy/bin/python3" jluboottool.py --chip br23 "$@" ); }
+jlt(){
+  [ -f "$TOOLDIR/jluboottool.py" ] || { echo "no $TOOLDIR: the flasher's engine (jl-uboot-tool) is fetched, not in git." >&2
+    echo "Enter the dev shell once (nix develop: it links it), or run fw-re/get-uboot-tool.sh as yourself (not sudo)." >&2; exit 1; }
+  ( cd "$TOOLDIR" && "$HERE/.jlpy/bin/python3" jluboottool.py --chip br23 "$@" ); }
 find_sg(){  # /dev/sgN whose USB ancestor has idVendor 4c4a (JieLi UBOOT)
   for s in /sys/class/scsi_generic/sg*; do
     [ -e "$s" ] || continue
