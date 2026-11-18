@@ -59,7 +59,7 @@ Device descriptors found in the images (`12 01 00 02 …`):
 | `054C:09CC` | pad, receiver | Sony DualShock 4 (2nd revision). The product string is "Wireless Controller" (the DS4's own) |
 | `045E:028E` | receiver | Microsoft Xbox 360 Controller, class 0xFF (XInput / XUSB), "Xbox 360 Controller for Windows" |
 | `3537:1053` | pad | GameSir C2 ADC, wired (docs/gamesir-connect.md) |
-| `3537:015A`, `0157`, `5437`, `0163`, `0178`, `0141` (bcd 0x0160) | pad | GameSir; which mode each one is is not mapped yet |
+| `3537:015A`, `0157`, `5437`, `0163`, `0178`, `01AB`, `0141` (bcd 0x0160) | pad | GameSir; which mode each one is is not mapped yet. Stock v3.56 holds them in one table of 15 device descriptors (0x1E5CF82..0x1E5D07E, with Sony `054C:09CC`, Nintendo `057E:2009`, PowerA `20D6:A711`, ShanWan `2563:*`), chosen by code that doesn't name them directly. Our firmware uses `01AB` for the debug log alone (charging mode) |
 | `3537:0575` | receiver | idle, no pad linked (docs/dongle.md) |
 | `3537:100B`, `102A` | receiver | wireless, GameSir Connect's IDs (docs/gamesir-connect.md) |
 | `3537:0280`, `015A`, `0177`, `0178`, `101F` | receiver | GameSir; not mapped yet |
