@@ -1,0 +1,7 @@
+# firmware/src files the receiver builds (firmware/sdk/patch_sdk.py); its app is
+# boards/dongle/dg_*.c
+core/gp_log.c
+core/gp_sinput_desc.c
+core/gp_link.c
+core/gp_xinput_desc.c
+core/gp_ds4_desc.c

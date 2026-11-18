@@ -1,0 +1,72 @@
+# Firmware images: both boards built with firmware/build.sh --wall (any
+# warning in our sources fails), on every push and PR. The JieLi toolchain
+# comes from the flake (.#jl-toolchain, the dev shell's), the SDK is fetched
+# at firmware/sdk/SDK_COMMIT (sparse: only what the build reads, ~100 MB,
+# a few seconds). Each run uploads the image, the ELF and the JSON sidecar
+# (release, commit, SDK commit, sizes, sha256).
+#
+# Builds aren't reproducible yet (docs/plan.md 6.4): a CI image won't match
+# a local one byte for byte. The committed images in firmware/images/ stay
+# the ones built and tested by hand.
+name: firmware
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: firmware-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        board: [c2, dongle]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: Toolchain (flake.nix)
+        run: |
+          nix build .#jl-toolchain -o "$RUNNER_TEMP/jl-toolchain"
+          echo "JL_TOOLCHAIN=$RUNNER_TEMP/jl-toolchain" >> "$GITHUB_ENV"
+
+      - name: JieLi SDK at firmware/sdk/SDK_COMMIT
+        run: |
+          sdk=$RUNNER_TEMP/fw-AC63_BT_SDK
+          git init -q "$sdk"
+          git -C "$sdk" remote add origin https://github.com/Jieli-Tech/fw-AC63_BT_SDK.git
+          git -C "$sdk" sparse-checkout set --cone apps cpu/br23 include_lib
+          git -C "$sdk" fetch -q --depth 1 --filter=blob:none origin "$(tr -d ' \n' < firmware/sdk/SDK_COMMIT)"
+          git -C "$sdk" checkout -q FETCH_HEAD
+          echo "SDK=$sdk" >> "$GITHUB_ENV"
+
+      - name: Build ${{ matrix.board }}
+        env:
+          BOARD: ${{ matrix.board }}
+          IN_NIX_SHELL: ci   # build.sh: don't re-enter the full dev shell; make, git, python3 are the runner's
+        run: |
+          firmware/build.sh --wall || { echo '--- make log (tail)'; tail -40 firmware/build/make.log; exit 1; }
+
+      - name: Summary
+        run: |
+          j=firmware/build/${{ matrix.board }}.json
+          {
+            echo "### ${{ matrix.board }}"
+            echo '```json'
+            cat "$j"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: firmware-${{ matrix.board }}
+          path: |
+            firmware/build/${{ matrix.board }}.flash.bin
+            firmware/build/${{ matrix.board }}.elf
+            firmware/build/${{ matrix.board }}.json
+          if-no-files-found: error

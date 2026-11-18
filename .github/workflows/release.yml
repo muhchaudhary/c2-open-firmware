@@ -1,0 +1,166 @@
+# Release: rebuild the committed, hardware-tested images in CI, check them
+# byte for byte, and put together the release folder. Run by hand (Actions,
+# "release", Run workflow, on main). It tags and publishes nothing.
+#
+# Each image in firmware/images/ has its build.sh sidecar next to it
+# (C2_pad.json for C2_pad.flash.bin, ...): the release, the commit it was
+# built from, its sha256. Every image is rebuilt at that commit (the pad's
+# image carries its commit, so it can't be rebuilt at the later one that
+# committed it) and must come out identical (docs/plan.md 6.4).
+#
+# The release folder (artifact release-<version>): the images, their ELFs
+# and sidecars, manifest.json, SHA256SUMS, LICENSE, LICENSING.md, LICENSES/.
+# The steps around it: firmware/README.md, "Releases".
+name: release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      images: ${{ steps.read.outputs.images }}
+      version: ${{ steps.read.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: read
+        name: The committed images and their sidecars
+        shell: python3 {0}
+        run: |
+          import glob, json, os, sys
+          imgs, vers, bad = [], set(), []
+          for j in sorted(glob.glob('firmware/images/*.json')):
+              name = os.path.basename(j)[:-5]
+              d = json.load(open(j))
+              if not os.path.exists(f'firmware/images/{name}.flash.bin'):
+                  bad.append(f'{j}: no {name}.flash.bin next to it')
+              if d['commit'].endswith('+'):
+                  bad.append(f'{j}: built from a tree with changes ({d["commit"]}): not reproducible')
+              vers.add(d['release'])
+              imgs.append(dict(name=name, board=d['board'], commit=d['commit'], sha256=d['sha256']))
+          for b in glob.glob('firmware/images/*.flash.bin'):
+              if not os.path.exists(b[:-len('.flash.bin')] + '.json'):
+                  bad.append(f'{b}: no sidecar (.json from firmware/build/)')
+          if not imgs:
+              bad.append('no firmware/images/*.json')
+          if len(vers) > 1:
+              bad.append(f'the images are from different releases: {sorted(vers)}')
+          for i in imgs:
+              print(f'{i["name"]}: board {i["board"]}, commit {i["commit"]}, sha256 {i["sha256"][:16]}')
+          if bad:
+              sys.exit('\n'.join('error: ' + b for b in bad))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f'images={json.dumps(imgs)}\nversion={vers.pop()}\n')
+
+  build:
+    name: build ${{ matrix.image.name }}
+    needs: plan
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.plan.outputs.images) }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # the image's commit
+
+      - name: Source at ${{ matrix.image.commit }}
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/src" "${{ matrix.image.commit }}"
+          echo "SRC=$RUNNER_TEMP/src" >> "$GITHUB_ENV"
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: Toolchain (that commit's flake.nix)
+        run: |
+          nix build "git+file://$SRC#jl-toolchain" -o "$RUNNER_TEMP/jl-toolchain"
+          echo "JL_TOOLCHAIN=$RUNNER_TEMP/jl-toolchain" >> "$GITHUB_ENV"
+
+      - name: JieLi SDK at that commit's SDK_COMMIT
+        run: |
+          sdk=$RUNNER_TEMP/fw-AC63_BT_SDK
+          git init -q "$sdk"
+          git -C "$sdk" remote add origin https://github.com/Jieli-Tech/fw-AC63_BT_SDK.git
+          git -C "$sdk" sparse-checkout set --cone apps cpu/br23 include_lib
+          git -C "$sdk" fetch -q --depth 1 --filter=blob:none origin "$(tr -d ' \n' < "$SRC/firmware/sdk/SDK_COMMIT")"
+          git -C "$sdk" checkout -q FETCH_HEAD
+          echo "SDK=$sdk" >> "$GITHUB_ENV"
+
+      - name: Build ${{ matrix.image.name }}
+        env:
+          BOARD: ${{ matrix.image.board }}
+          IN_NIX_SHELL: ci
+        run: |
+          "$SRC/firmware/build.sh" --wall || { tail -40 "$SRC/firmware/build/make.log"; exit 1; }
+
+      - name: Same as the committed image
+        run: |
+          b=${{ matrix.image.board }} n=${{ matrix.image.name }}
+          mkdir -p out
+          cp "$SRC/firmware/build/$b.flash.bin" "out/$n.flash.bin"
+          cp "$SRC/firmware/build/$b.elf" "out/$n.elf"
+          cp "$SRC/firmware/build/$b.json" "out/$n.json"
+          have=$(sha256sum "out/$n.flash.bin" | cut -d' ' -f1)
+          echo "built:     $have"
+          echo "sidecar:   ${{ matrix.image.sha256 }}"
+          echo "committed: $(sha256sum "firmware/images/$n.flash.bin" | cut -d' ' -f1)"
+          if [ "$have" != "${{ matrix.image.sha256 }}" ] || ! cmp -s "out/$n.flash.bin" "firmware/images/$n.flash.bin"; then
+            echo "::error::$n: the CI build differs from the committed image"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: image-${{ matrix.image.name }}
+          path: out/
+          if-no-files-found: error
+
+  release:
+    needs: [plan, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: image-*
+          merge-multiple: true
+          path: images
+
+      - name: Release folder
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          d=release/gamesir-c2-firmware-$VERSION
+          mkdir -p "$d"
+          cp images/* "$d/"
+          cp -r LICENSE LICENSING.md LICENSES "$d/"
+          python3 - "$d" <<'PY'
+          import glob, json, os, sys
+          d = sys.argv[1]
+          side = {os.path.basename(j)[:-5]: json.load(open(j)) for j in sorted(glob.glob(f'{d}/*.json'))}
+          json.dump({
+              'release': os.environ['VERSION'],
+              'images': side,
+              'repository': os.environ['GITHUB_REPOSITORY'],
+              'release_run': f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+              'images_commit': os.environ['GITHUB_SHA'],
+          }, open(f'{d}/manifest.json', 'w'), indent=2)
+          PY
+          (cd "$d" && find . -type f ! -name SHA256SUMS | sed 's#^\./##' | LC_ALL=C sort | xargs sha256sum > SHA256SUMS)
+          {
+            echo "## Release $VERSION"
+            echo "Every image rebuilt in CI at its commit and identical to the committed one."
+            echo '```'
+            grep -E '\.flash\.bin$' "$d/SHA256SUMS"
+            echo '```'
+            echo "Tag it: \`git tag v$VERSION $GITHUB_SHA && git push origin v$VERSION\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: release-${{ needs.plan.outputs.version }}
+          path: release/
+          if-no-files-found: error

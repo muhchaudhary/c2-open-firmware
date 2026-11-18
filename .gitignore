@@ -1,0 +1,29 @@
+__pycache__/
+
+fw-re/.jlpy
+
+# debug captures
+logs/
+
+# nix-direnv cache
+.direnv/
+
+fw-re/jl-toolchain/
+
+# firmware build output (firmware/build.sh): image, ELF, make log, debug log
+firmware/build/
+firmware/test/build/
+
+# editor settings
+.vscode/
+
+# flash backups (device-specific: pairing data, MAC)
+backups/
+
+# GameSir's stock firmware: not ours to redistribute, and no build of the
+# firmware needs it (firmware/mkimage.py). Kept at these paths on your own
+# disk for reverse engineering: the .ufw files from GameSir Connect, the v19 image and the decrypted 3.56
+# app (fw-re/ufw.py, fw-re/flash.py).
+fw-re/orig/
+fw-re/refs/
+fw-re/app_v356.bin

@@ -1,0 +1,20 @@
+{
+  "_comment": "The pad's flash image (firmware/mkimage.py): the whole JLFS container, written at SPI 0x1000 by fw-re/jlflash.sh. Layout as the C2 has it (docs/firmware-design.md, 'The boot container'). The header's name and version are the ones the pad's stock images carry (kept so tools and GameSir Connect see the same device).",
+  "kind": "full",
+  "image_size": "0x77000",
+  "header": {"name": "GS_C2_ADC_DEVICE", "version": "3.56", "flash_size": "0xff000", "flags": "0210a4ff"},
+  "uboot": "uboot.boot",
+  "uboot_at": "0xc0",
+  "isd_config": [["SPI", "2_3_0_0"], ["UTTX", "PB04"], ["UTBD", 1000000], ["RESET", "PB01_00_0"],
+                 ["UPDATE_JUMP", 0], ["PSRAM", 0], ["VLVD", 4], ["EOFFSET", 1]],
+  "dirs": [
+    {"name": "app_dir_head",  "off": "0x3020",  "size": "0x3000",  "flags": "0x81", "resvd": "0xff", "dcrc": "0x00ff"},
+    {"name": "app_dir_head2", "off": "0x7c020", "size": "0x7c000", "flags": "0x81", "resvd": "0xff", "dcrc": "0x00ff"},
+    {"name": "key_mac",       "off": "0xff000", "size": "0x1000",  "flags": "0x12", "resvd": "0x01", "dcrc": "0xffff", "idx": "0xffff"}
+  ],
+  "areas": [
+    {"name": "VM",   "off": "0xf7000", "size": "0x7000",  "flags": "0x12", "resvd": "0x81", "attr": "00800000"},
+    {"name": "PRCT", "off": "0x1000",  "size": "0xf6000", "flags": "0x92", "resvd": "0x82", "attr": "434f4445"},
+    {"name": "BTIF", "off": "0xfe000", "size": "0x1000",  "flags": "0x92", "resvd": "0x81", "attr": "4155544f"}
+  ]
+}

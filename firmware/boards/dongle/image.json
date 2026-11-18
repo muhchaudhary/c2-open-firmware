@@ -1,0 +1,11 @@
+{
+  "_comment": "The receiver's image (firmware/mkimage.py): its app area only, written at SPI 0x11000 by fw-re/jlflash.sh. The receiver boots its own loader from SPI 0x0 (isd_config EOFFSET 0x10), which finds the app area through the JLFS header at 0x10000; neither is written. The areas are where the chip keeps them (docs/dongle.md). The 4 KB at 0x60000 hold the installer's record (0x60FF0): the image must end before it.",
+  "kind": "app",
+  "flash_at": "0x11000",
+  "max_size": "0x4f000",
+  "areas": [
+    {"name": "VM",   "off": "0x61000", "size": "0x1d000", "flags": "0x12", "resvd": "0x81", "attr": "00200100"},
+    {"name": "PRCT", "off": "0x10000", "size": "0x51000", "flags": "0x92", "resvd": "0x82", "attr": "434f4445"},
+    {"name": "BTIF", "off": "0x7e000", "size": "0x1000",  "flags": "0x92", "resvd": "0x81", "attr": "4155544f"}
+  ]
+}

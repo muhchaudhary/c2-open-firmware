@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C2 Battery Log</title>
+<style>
+:root {
+  color-scheme: light;
+  --surface-0: #f4f4f2;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --border: #e1e0d9;
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --band: rgba(42, 120, 214, 0.09);
+  --focus: #2a78d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --surface-0: #111110;
+    --surface-1: #1a1a19;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: #2c2c2a;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --band: rgba(57, 135, 229, 0.14);
+    --focus: #3987e5;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #111110;
+  --surface-1: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --border: #2c2c2a;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --band: rgba(57, 135, 229, 0.14);
+  --focus: #3987e5;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--surface-0); color: var(--text-primary);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 40px; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; font-weight: 600; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+select, button {
+  font: inherit; color: var(--text-primary); background: var(--surface-1);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px;
+}
+button { cursor: pointer; }
+button[aria-pressed="true"] { border-color: var(--focus); color: var(--focus); font-weight: 600; }
+select:focus-visible, button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.seg { display: inline-flex; gap: 4px; }
+.live { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+.tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.tile .k { color: var(--text-secondary); font-size: 12px; }
+.tile .v { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.tile .s { color: var(--text-muted); font-size: 12px; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 12px 12px 6px; margin-bottom: 12px; position: relative; }
+.card h2 { font-size: 14px; font-weight: 600; margin: 0 0 2px; }
+.card .sub { color: var(--text-muted); font-size: 12px; margin-bottom: 4px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-secondary); margin: 2px 0 4px; }
+.legend i { display: inline-block; width: 12px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+svg { display: block; width: 100%; overflow: visible; }
+svg text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.tip {
+  position: fixed; pointer-events: none; z-index: 10; display: none;
+  background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--axis);
+  border-radius: 6px; padding: 7px 9px; font-size: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.15);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.tip b { font-weight: 600; }
+.tip .r { color: var(--text-secondary); }
+.empty { color: var(--text-muted); padding: 40px 0; text-align: center; }
+details { margin-top: 8px; }
+summary { cursor: pointer; color: var(--text-secondary); }
+table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; margin-top: 8px; }
+th, td { text-align: right; padding: 3px 8px; border-bottom: 1px solid var(--border); }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--text-secondary); font-weight: 600; }
+.tablewrap { max-height: 360px; overflow: auto; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 0 8px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>C2 battery</h1>
+    <div class="controls">
+      <label for="src" class="live">Source</label>
+      <select id="src"></select>
+      <div class="seg" role="group" aria-label="Time range">
+        <button data-range="0" aria-pressed="true">All</button>
+        <button data-range="21600">6 h</button>
+        <button data-range="3600">1 h</button>
+        <button data-range="900">15 min</button>
+      </div>
+      <span class="live" id="live"></span>
+    </div>
+  </header>
+
+  <section class="tiles" id="tiles"></section>
+
+  <div id="charts">
+    <div class="card">
+      <h2>Battery voltage (mV)</h2>
+      <div class="sub">The pad's running average. Shaded: on 5 V (USB or dock). Dashed line: the charger stopped (PB02 went high on 5 V).</div>
+      <div class="legend"><span><i style="background:var(--series-1)"></i>Voltage</span><span><i style="background:var(--band);border:1px solid var(--axis)"></i>On 5 V</span></div>
+      <div id="c-mv"></div>
+    </div>
+    <div class="card">
+      <h2>Reported battery (%)</h2>
+      <div class="sub">What the pad tells the host (linear over 3250–4100 mV today).</div>
+      <div id="c-pct"></div>
+    </div>
+    <div class="card">
+      <h2>Power state</h2>
+      <div class="sub">A filled lane means the state held then.</div>
+      <div class="legend">
+        <span><i style="background:var(--series-1)"></i>5 V present</span>
+        <span><i style="background:var(--series-2)"></i>Charger active (PB02 low on 5 V)</span>
+        <span><i style="background:var(--series-3)"></i>Pad reports "full"</span>
+      </div>
+      <div id="c-lanes"></div>
+    </div>
+  </div>
+
+  <details>
+    <summary>Table (newest first)</summary>
+    <div class="tablewrap"><table id="tbl"></table></div>
+  </details>
+</main>
+<div class="tip" id="tip" role="status"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const NS = 'http://www.w3.org/2000/svg';
+let rows = [], range = 0, hoverT = null;
+const PLUG = { 2: 'Charging', 3: 'Full (reported)', 4: 'On battery', 1: 'No battery' };
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const fmtTime = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const fmtTimeS = (t) => new Date(t * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function fmtDur(s) {
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  return h ? `${h} h ${m} min` : `${m} min`;
+}
+const charging = (r) => r.usb || r.dock;
+const chargerActive = (r) => charging(r) && r.pb02 === 0;
+
+function niceStep(span, n) {
+  const raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw)));
+  for (const m of [1, 2, 5, 10]) if (m * p >= raw) return m * p;
+  return 10 * p;
+}
+function timeStep(span) {
+  for (const s of [60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400])
+    if (span / s <= 7) return s;
+  return 86400;
+}
+
+function view() {
+  if (!rows.length) return [];
+  if (!range) return rows;
+  const end = rows[rows.length - 1].t;
+  return rows.filter((r) => r.t >= end - range);
+}
+
+/* Segments of consecutive rows; a gap of more than 3x the usual interval breaks the line. */
+function segments(v) {
+  if (v.length < 2) return [v];
+  const d = v.slice(1).map((r, i) => r.t - v[i].t).sort((a, b) => a - b);
+  const gap = Math.max(30, d[Math.floor(d.length / 2)] * 3);
+  const out = [[v[0]]];
+  for (let i = 1; i < v.length; i++) {
+    if (v[i].t - v[i - 1].t > gap) out.push([]);
+    out[out.length - 1].push(v[i]);
+  }
+  return out;
+}
+
+/* Runs of rows where pred holds: [t0, t1] pairs. */
+function runs(v, pred) {
+  const out = [];
+  let start = null;
+  for (let i = 0; i < v.length; i++) {
+    const on = pred(v[i]);
+    if (on && start === null) start = v[i].t;
+    if (!on && start !== null) { out.push([start, v[i].t]); start = null; }
+  }
+  if (start !== null) out.push([start, v[v.length - 1].t]);
+  return out;
+}
+
+const M = { l: 48, r: 14, t: 8, b: 22 };
+function frame(host, h, v) {
+  host.innerHTML = '';
+  const w = host.clientWidth || 600;
+  const svg = el('svg', { viewBox: `0 0 ${w} ${h}`, height: h, role: 'img' }, host);
+  const t0 = v[0].t, t1 = Math.max(v[v.length - 1].t, t0 + 60);
+  const x = (t) => M.l + ((t - t0) / (t1 - t0)) * (w - M.l - M.r);
+  return { svg, w, h, x, t0, t1 };
+}
+function timeAxis(f) {
+  const step = timeStep(f.t1 - f.t0);
+  const first = Math.ceil(f.t0 / step) * step;
+  let lastX = -1e9;
+  for (let t = first; t <= f.t1; t += step) {
+    const px = f.x(t);
+    if (px - lastX < 56) continue;
+    lastX = px;
+    el('line', { x1: px, x2: px, y1: M.t, y2: f.h - M.b, stroke: 'var(--grid)', 'stroke-width': 1 }, f.svg);
+    const tx = el('text', { x: px, y: f.h - 6, 'text-anchor': 'middle' }, f.svg);
+    tx.textContent = fmtTime(t);
+  }
+}
+function hoverLayer(f, v) {
+  const cross = el('line', { y1: M.t, y2: f.h - M.b, stroke: 'var(--text-muted)', 'stroke-width': 1, visibility: 'hidden' }, f.svg);
+  const hit = el('rect', { x: M.l, y: 0, width: f.w - M.l - M.r, height: f.h, fill: 'transparent' }, f.svg);
+  f.cross = cross;
+  hit.addEventListener('pointermove', (e) => {
+    const r = f.svg.getBoundingClientRect();
+    const px = (e.clientX - r.left) * (f.w / r.width);
+    hoverT = f.t0 + ((px - M.l) / (f.w - M.l - M.r)) * (f.t1 - f.t0);
+    showHover(e.clientX, e.clientY);
+  });
+  hit.addEventListener('pointerleave', () => { hoverT = null; showHover(); });
+}
+
+function lineChart(host, v, key, opts) {
+  const f = frame(host, opts.h, v);
+  const vals = v.map((r) => r[key]);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  if (opts.fixed) { lo = opts.fixed[0]; hi = opts.fixed[1]; }
+  else { const pad = Math.max(5, (hi - lo) * 0.08); lo -= pad; hi += pad; }
+  const step = niceStep(hi - lo, 4);
+  lo = Math.floor(lo / step) * step; hi = Math.ceil(hi / step) * step;
+  const y = (val) => f.h - M.b - ((val - lo) / (hi - lo)) * (f.h - M.t - M.b);
+  f.y = y;
+  if (opts.bands) for (const [a, b] of runs(v, charging))
+    el('rect', { x: f.x(a), y: M.t, width: Math.max(1, f.x(b) - f.x(a)), height: f.h - M.t - M.b, fill: 'var(--band)' }, f.svg);
+  for (let val = lo; val <= hi + 1e-9; val += step) {
+    el('line', { x1: M.l, x2: f.w - M.r, y1: y(val), y2: y(val), stroke: 'var(--grid)', 'stroke-width': 1 }, f.svg);
+    const tx = el('text', { x: M.l - 6, y: y(val) + 4, 'text-anchor': 'end' }, f.svg);
+    tx.textContent = Math.round(val);
+  }
+  timeAxis(f);
+  el('line', { x1: M.l, x2: f.w - M.r, y1: f.h - M.b, y2: f.h - M.b, stroke: 'var(--axis)', 'stroke-width': 1 }, f.svg);
+  if (opts.events) for (let i = 1; i < v.length; i++) {
+    if (charging(v[i]) && charging(v[i - 1]) && v[i - 1].pb02 === 0 && v[i].pb02 === 1) {
+      const px = f.x(v[i].t);
+      el('line', { x1: px, x2: px, y1: M.t, y2: f.h - M.b, stroke: 'var(--series-2)', 'stroke-width': 1.5, 'stroke-dasharray': '4 3' }, f.svg);
+      const tx = el('text', { x: px + 4, y: M.t + 11, style: 'fill:var(--text-secondary)' }, f.svg);
+      tx.textContent = `charger done ${fmtTime(v[i].t)}`;
+    }
+  }
+  for (const s of segments(v)) {
+    if (!s.length) continue;
+    const d = s.map((r, i) => {
+      const px = f.x(r.t).toFixed(1), py = y(r[key]).toFixed(1);
+      if (i === 0) return `M${px},${py}`;
+      return opts.step ? `H${px}V${py}` : `L${px},${py}`;
+    }).join('');
+    el('path', { d, fill: 'none', stroke: 'var(--series-1)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, f.svg);
+  }
+  f.dot = el('circle', { r: 4, fill: 'var(--series-1)', stroke: 'var(--surface-1)', 'stroke-width': 2, visibility: 'hidden' }, f.svg);
+  f.key = key;
+  hoverLayer(f, v);
+  return f;
+}
+
+function lanes(host, v) {
+  const L = [
+    ['5 V', charging, 'var(--series-1)'],
+    ['Charger', chargerActive, 'var(--series-2)'],
+    ['"Full"', (r) => r.plug === 3, 'var(--series-3)'],
+  ];
+  const lh = 18, gap = 8, h = M.t + L.length * (lh + gap) + M.b;
+  const f = frame(host, h, v);
+  timeAxis(f);
+  L.forEach(([name, pred, col], i) => {
+    const y0 = M.t + i * (lh + gap);
+    el('rect', { x: M.l, y: y0, width: f.w - M.l - M.r, height: lh, fill: 'var(--grid)', opacity: 0.5, rx: 3 }, f.svg);
+    for (const [a, b] of runs(v, pred))
+      el('rect', { x: f.x(a), y: y0, width: Math.max(2, f.x(b) - f.x(a)), height: lh, fill: col, rx: 3 }, f.svg);
+    const tx = el('text', { x: M.l - 6, y: y0 + 13, 'text-anchor': 'end', style: 'fill:var(--text-secondary)' }, f.svg);
+    tx.textContent = name;
+  });
+  hoverLayer(f, v);
+  return f;
+}
+
+let charts = [];
+function nearest(v, t) {
+  let best = v[0];
+  for (const r of v) if (Math.abs(r.t - t) < Math.abs(best.t - t)) best = r;
+  return best;
+}
+function showHover(cx, cy) {
+  const tip = $('#tip'), v = view();
+  if (hoverT === null || !v.length) {
+    tip.style.display = 'none';
+    for (const f of charts) { f.cross.setAttribute('visibility', 'hidden'); if (f.dot) f.dot.setAttribute('visibility', 'hidden'); }
+    return;
+  }
+  const r = nearest(v, hoverT);
+  for (const f of charts) {
+    const px = f.x(r.t);
+    f.cross.setAttribute('x1', px); f.cross.setAttribute('x2', px); f.cross.setAttribute('visibility', 'visible');
+    if (f.dot) { f.dot.setAttribute('cx', px); f.dot.setAttribute('cy', f.y(r[f.key])); f.dot.setAttribute('visibility', 'visible'); }
+  }
+  const pb = r.pb02 === null ? '—' : r.pb02 ? 'high' : 'low';
+  tip.innerHTML = `<b>${fmtTimeS(r.t)}</b><br><b>${r.mv} mV</b> · ${r.pct} %<br>` +
+    `<span class="r">${PLUG[r.plug] || r.plug} · PB02 ${pb}${r.usb ? ' · USB 5 V' : ''}${r.dock ? ' · docked' : ''}</span>`;
+  tip.style.display = 'block';
+  const tw = tip.offsetWidth, th = tip.offsetHeight;
+  tip.style.left = Math.min(window.innerWidth - tw - 8, cx + 14) + 'px';
+  tip.style.top = Math.max(8, cy - th - 10) + 'px';
+}
+
+function tiles() {
+  const box = $('#tiles');
+  if (!rows.length) { box.innerHTML = ''; return; }
+  const last = rows[rows.length - 1];
+  let since = rows[0].t;                         /* last change of 5 V */
+  for (let i = rows.length - 1; i > 0; i--) if (charging(rows[i]) !== charging(rows[i - 1])) { since = rows[i].t; break; }
+  const win = rows.filter((r) => r.t >= last.t - 1800 && !!charging(r) === !!charging(last));
+  let rate = '—';
+  if (win.length > 2 && last.t - win[0].t >= 600) {
+    const n = win.length, mt = win.reduce((a, r) => a + r.t, 0) / n, mv = win.reduce((a, r) => a + r.mv, 0) / n;
+    let num = 0, den = 0;
+    for (const r of win) { num += (r.t - mt) * (r.mv - mv); den += (r.t - mt) ** 2; }
+    const s = den ? (num / den) * 3600 : 0;
+    rate = `${s >= 0 ? '+' : '−'}${Math.abs(s).toFixed(0)}`;
+  }
+  const charger = !charging(last) ? 'No 5 V' : last.pb02 === 0 ? 'Charging' : last.pb02 === 1 ? 'Done' : '—';
+  const T = [
+    ['Voltage', `${last.mv} mV`, fmtTimeS(last.t)],
+    ['Reported', `${last.pct} %`, PLUG[last.plug] || `plug ${last.plug}`],
+    ['Charger (PB02)', charger, last.usb ? 'USB 5 V' : last.dock ? 'docked' : 'on battery'],
+    [charging(last) ? 'On 5 V for' : 'On battery for', fmtDur(last.t - since), `since ${fmtTime(since)}`],
+    ['Trend, last 30 min', rate === '—' ? '—' : `${rate} mV/h`, rate === '—' ? 'needs 10 min of one state' : 'least-squares fit'],
+  ];
+  box.innerHTML = T.map(([k, v, s]) => `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`).join('');
+}
+
+function table() {
+  const t = $('#tbl');
+  const head = '<tr><th>Time</th><th>mV</th><th>%</th><th>State</th><th>PB02</th><th>5 V</th></tr>';
+  const body = rows.slice(-500).reverse().map((r) =>
+    `<tr><td>${new Date(r.t * 1000).toLocaleString()}</td><td>${r.mv}</td><td>${r.pct}</td><td>${PLUG[r.plug] || r.plug}</td>` +
+    `<td>${r.pb02 === null ? '—' : r.pb02}</td><td>${r.usb ? 'USB' : r.dock ? 'dock' : '—'}</td></tr>`).join('');
+  t.innerHTML = head + body;
+}
+
+function render() {
+  tiles();
+  const v = view();
+  charts = [];
+  if (v.length < 2) {
+    for (const id of ['#c-mv', '#c-pct', '#c-lanes']) $(id).innerHTML = '<div class="empty">Not enough data yet</div>';
+  } else {
+    charts.push(lineChart($('#c-mv'), v, 'mv', { h: 280, bands: true, events: true }));
+    charts.push(lineChart($('#c-pct'), v, 'pct', { h: 170, fixed: [0, 100], step: true, bands: true }));
+    charts.push(lanes($('#c-lanes'), v));
+  }
+  table();
+}
+
+async function loadSources() {
+  const list = await (await fetch('/api/sources')).json();
+  const sel = $('#src'), cur = sel.value;
+  sel.innerHTML = list.map((s) => `<option value="${s.name}">${s.name}</option>`).join('');
+  if (cur && list.some((s) => s.name === cur)) sel.value = cur;
+  try { const saved = localStorage.getItem('c2bat-src'); if (!cur && saved && list.some((s) => s.name === saved)) sel.value = saved; } catch (e) {}
+}
+async function loadData() {
+  const src = $('#src').value;
+  if (!src) { rows = []; render(); $('#live').textContent = 'no logs in firmware/build yet'; return; }
+  try {
+    rows = await (await fetch('/api/data?src=' + encodeURIComponent(src))).json();
+    $('#live').textContent = `${rows.length} rows · updated ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    $('#live').textContent = 'server not reachable';
+  }
+  render();
+}
+
+$('#src').addEventListener('change', () => {
+  try { localStorage.setItem('c2bat-src', $('#src').value); } catch (e) {}
+  loadData();
+});
+document.querySelectorAll('[data-range]').forEach((b) => b.addEventListener('click', () => {
+  range = +b.dataset.range;
+  document.querySelectorAll('[data-range]').forEach((o) => o.setAttribute('aria-pressed', o === b));
+  render();
+}));
+new ResizeObserver(() => render()).observe($('#charts'));
+(async () => {
+  await loadSources();
+  await loadData();
+  setInterval(async () => { await loadSources(); await loadData(); }, 10000);
+})();
+</script>
+</body>
+</html>

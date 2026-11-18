@@ -1,0 +1,895 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C2 Configurator</title>
+<!--
+  c2cfg.html: configure the GameSir Cyclone 2 (this project's firmware) from the
+  browser, over the configuration protocol (docs/config-protocol.md), the
+  same as tools/c2cfg.py:
+    - WebHID: the SInput HID device (Steam mode: USB, Bluetooth, receiver);
+    - WebSerial: the USB debug log port ("cfg <hex>" / "cfg> <hex>"), the
+      pad on its cable or the receiver, any mode.
+  Chrome or Edge; open this file directly (file://) or from localhost.
+  No libraries, no network. Settings come from the pad's own table (LIST),
+  so new firmware settings show up without changes here.
+-->
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #1b1f24; --muted: #5f6b7a; --line: #dde2e8;
+  --accent: #2f6fde; --accent-text: #ffffff; --good: #1f8a4c; --warn: #b26a00; --bad: #c43a3a;
+  --track: #e6eaef; --plot: #2f6fde; --plot-ref: #c3ccd8; --chip: #eef2f7;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --panel: #1a1f25; --text: #e7ebf0; --muted: #9aa6b4; --line: #2c333c;
+    --accent: #5b93f5; --accent-text: #0b1220; --good: #46c27f; --warn: #e3a23b; --bad: #ef6b6b;
+    --track: #2a313a; --plot: #6ea2ff; --plot-ref: #3a4350; --chip: #232a33;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --panel: #1a1f25; --text: #e7ebf0; --muted: #9aa6b4; --line: #2c333c;
+  --accent: #5b93f5; --accent-text: #0b1220; --good: #46c27f; --warn: #e3a23b; --bad: #ef6b6b;
+  --track: #2a313a; --plot: #6ea2ff; --plot-ref: #3a4350; --chip: #232a33;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 980px; margin: 0 auto; padding: 20px 16px 60px; }
+h1 { font-size: 22px; margin: 0; }
+h2 { font-size: 16px; margin: 0 0 12px; }
+h3 { font-size: 14px; margin: 18px 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+p { margin: 6px 0; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+button {
+  font: inherit; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+  padding: 7px 13px; cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+button.danger { color: var(--bad); }
+button:disabled { opacity: .45; cursor: default; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); display: inline-block; margin-right: 6px; }
+.status-dot.on { background: var(--good); }
+.status-dot.busy { background: var(--warn); }
+.info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px 18px; }
+.info-grid div span { display: block; font-size: 12px; color: var(--muted); }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+.tabs button { border: none; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 12px; color: var(--muted); }
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
+.setting { display: grid; grid-template-columns: minmax(150px, 220px) 1fr auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.setting:last-child { border-bottom: none; }
+.setting label { font-weight: 500; }
+.setting .help { grid-column: 1 / -1; margin-top: -4px; font-size: 13px; color: var(--muted); }
+.setting .val { min-width: 64px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+select, input[type=number] {
+  font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px;
+}
+.tuning { display: grid; grid-template-columns: 1fr 240px; gap: 18px; }
+canvas.plot { width: 240px; height: 240px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.buttons-table { width: 100%; border-collapse: collapse; }
+.buttons-table td, .buttons-table th { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.buttons-table th { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; }
+.chip { display: inline-block; background: var(--chip); border-radius: 5px; padding: 1px 7px; font-size: 13px; }
+.bar { position: relative; height: 14px; background: var(--track); border-radius: 7px; overflow: hidden; }
+.bar .fill { position: absolute; top: 0; bottom: 0; background: var(--accent); }
+.bar .mark { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); }
+.bar .need { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--warn); }
+.cal-axis { display: grid; grid-template-columns: 44px 1fr 120px; gap: 10px; align-items: center; margin: 6px 0; }
+.ok { color: var(--good); }
+.short { color: var(--warn); }
+#toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); max-width: calc(100% - 32px);
+  background: var(--text); color: var(--bg); padding: 9px 14px; border-radius: 8px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+#toast.show { opacity: .95; }
+#log { height: 360px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px;
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; }
+.hidden { display: none !important; }
+@media (max-width: 640px) {
+  .setting { grid-template-columns: 1fr auto; }
+  .setting > :nth-child(2) { grid-column: 1 / -1; order: 3; }
+  .tuning { grid-template-columns: 1fr; }
+  canvas.plot { width: 100%; max-width: 280px; height: auto; aspect-ratio: 1; }
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>C2 Configurator</h1>
+      <div class="muted small" id="conn-line"><span class="status-dot" id="dot"></span><span id="conn-text">Not connected</span></div>
+    </div>
+    <div class="row">
+      <button class="primary" id="btn-hid">Connect (Steam mode)</button>
+      <button id="btn-serial">Connect (log port, any mode)</button>
+      <button id="btn-disconnect" class="hidden">Disconnect</button>
+    </div>
+  </header>
+
+  <div class="panel" id="intro">
+    <h2>Connect the pad</h2>
+    <p><b>Steam mode</b> (USB, Bluetooth or the C2 receiver): <em>Connect (Steam mode)</em> and pick “Cyclone 2 SI” or “GameSir C2 receiver”.</p>
+    <p><b>Any mode</b>, the pad on its USB cable or the receiver plugged in: <em>Connect (log port)</em> and pick its serial port.
+      Close <code>tools/c2log.py</code> first: only one program can read the port. On Linux your user needs the <code>dialout</code> (or <code>uucp</code>) group.</p>
+    <p class="muted small" id="support-line"></p>
+  </div>
+
+  <div id="app" class="hidden">
+    <div class="panel">
+      <div class="info-grid" id="info"></div>
+    </div>
+
+    <nav class="tabs" id="tabs">
+      <button data-tab="general" class="active">General</button>
+      <button data-tab="profile">Profile</button>
+      <button data-tab="buttons">Buttons</button>
+      <button data-tab="cal">Calibration</button>
+      <button data-tab="device">Device</button>
+      <button data-tab="log" id="tab-log-btn" class="hidden">Log</button>
+    </nav>
+
+    <section class="panel tab" id="tab-general"></section>
+
+    <section class="panel tab hidden" id="tab-profile">
+      <div class="row" style="justify-content: space-between; margin-bottom: 8px">
+        <h2 style="margin:0">Profile</h2>
+        <div class="row" id="profile-picker"></div>
+      </div>
+      <p class="muted small">Each of the 4 profiles has its own tuning, remaps and turbo. On the pad: M + Left / Right.</p>
+      <h3>Sticks</h3>
+      <div class="tuning">
+        <div id="stick-settings"></div>
+        <div><canvas class="plot" id="stick-plot" width="480" height="480"></canvas>
+          <div class="muted small">Output against stick travel (radial).</div></div>
+      </div>
+      <h3>Triggers</h3>
+      <div class="tuning">
+        <div id="trigger-settings"></div>
+        <div><canvas class="plot" id="trigger-plot" width="480" height="480"></canvas>
+          <div class="muted small">Output against trigger travel.</div></div>
+      </div>
+      <div id="profile-other"></div>
+    </section>
+
+    <section class="panel tab hidden" id="tab-buttons">
+      <h2>Buttons <span class="muted small" id="buttons-profile"></span></h2>
+      <p class="muted small">What the computer gets for each physical button, in the active profile. The pad's own combos (power, pairing, modes, rumble, profiles) still use the physical buttons.</p>
+      <table class="buttons-table">
+        <thead><tr><th>Button</th><th>Sends</th><th>Turbo</th></tr></thead>
+        <tbody id="buttons-body"></tbody>
+      </table>
+    </section>
+
+    <section class="panel tab hidden" id="tab-cal">
+      <h2>Calibration</h2>
+      <p class="muted small">Without a stored calibration the pad learns at runtime (leave the sticks alone at power-on). A stored one is used from boot.</p>
+      <div id="cal-stored"></div>
+      <h3>Calibrate</h3>
+      <div class="row" id="cal-parts">
+        <label><input type="checkbox" value="1" checked> Sticks</label>
+        <label><input type="checkbox" value="2" checked> Triggers</label>
+        <label><input type="checkbox" value="4" checked> Gyro</label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="cal-start">Start</button>
+        <button id="cal-finish" disabled>Finish and store</button>
+        <button id="cal-cancel" disabled>Cancel</button>
+      </div>
+      <div id="cal-live" class="hidden" style="margin-top:14px">
+        <p id="cal-step"></p>
+        <div id="cal-rest" class="bar"><div class="fill" style="left:0; width:0"></div></div>
+        <div id="cal-ranges"></div>
+      </div>
+    </section>
+
+    <section class="panel tab hidden" id="tab-device">
+      <h2>Device</h2>
+      <div class="info-grid" id="device-info"></div>
+      <h3>Maintenance</h3>
+      <div class="row">
+        <button id="dev-refresh">Refresh</button>
+        <button id="dev-defaults" class="danger">All settings to defaults</button>
+        <button id="dev-reboot">Restart the pad</button>
+        <button id="dev-bootloader" class="danger">USB bootloader</button>
+      </div>
+      <p class="muted small">The bootloader needs the USB cable (5 V). Then write an image with <code>sudo fw-re/jlflash.sh write …</code>; the pad restarts into the new firmware.</p>
+    </section>
+
+    <section class="panel tab hidden" id="tab-log">
+      <div class="row" style="justify-content: space-between">
+        <h2 style="margin:0">Debug log</h2>
+        <div class="row"><label class="small"><input type="checkbox" id="log-cfg"> show cfg lines</label><button id="log-clear">Clear</button></div>
+      </div>
+      <div id="log" style="margin-top:10px"></div>
+    </section>
+  </div>
+</main>
+<div id="toast"></div>
+
+<script>
+'use strict';
+
+/* ---- Protocol constants (docs/config-protocol.md) ------------------------- */
+const CMD = 0xC0;
+const OP = { INFO: 0, LIST: 1, GET: 2, SET: 3, DEFAULTS: 4, REBOOT: 5, BOOTLOADER: 6,
+             CAL_START: 0x10, CAL_STATUS: 0x11, CAL_FINISH: 0x12, CAL_CANCEL: 0x13, CAL_CLEAR: 0x14, CAL_GET: 0x15 };
+const STATUS = { 0: 'ok', 1: 'unknown operation', 2: 'unknown setting', 3: 'value out of range',
+                 4: 'not possible now', 5: 'request too short', 6: 'done, but NOT saved: in use until power-off' };
+const F_RESTART = 1, F_PROFILE = 2;
+const BUTTONS = ['a', 'b', 'x', 'y', 'up', 'down', 'left', 'right', 'l3', 'r3', 'lb', 'rb',
+                 'paddle_l', 'paddle_r', 'start', 'back', 'guide', 'capture'];
+const BUTTON_LABEL = { a: 'A', b: 'B', x: 'X', y: 'Y', up: 'D-pad up', down: 'D-pad down', left: 'D-pad left',
+  right: 'D-pad right', l3: 'L3 (left stick)', r3: 'R3 (right stick)', lb: 'LB', rb: 'RB',
+  paddle_l: 'Left paddle', paddle_r: 'Right paddle', start: 'Start / Menu', back: 'Back / View',
+  guide: 'Home', capture: 'Capture' };
+const MODES = { 0: 'Steam (SInput)', 1: 'Xbox', 2: 'DS4 (DualShock 4)' };
+const PLUG = { 2: 'charging', 3: 'full', 4: 'on battery' };
+const CAL_PARTS = { 1: 'sticks', 2: 'triggers', 4: 'gyro' };
+const AXES = ['LX', 'LY', 'RX', 'RY'];
+
+/* How known settings are shown; anything else gets a plain number field. */
+const META = {
+  rumble_level: { label: 'Rumble strength', kind: 'range', fmt: v => v ? `${v} / 4` : 'off', help: 'Also M + Up / Down on the pad.' },
+  mode: { label: 'Input mode', kind: 'enum', opts: MODES, help: 'What the pad is to the computer. The pad restarts.' },
+  idle_off_min: { label: 'Turn off when idle', kind: 'number', fmt: v => v ? `${v} min` : 'never', help: 'Connected and untouched for this long. 0: never.' },
+  profile: { label: 'Active profile', kind: 'enum', opts: { 0: '1', 1: '2', 2: '3', 3: '4' } },
+  link: { label: 'Wireless link', kind: 'enum', opts: { 0: 'Bluetooth', 1: 'C2 receiver' }, help: 'Bluetooth to the computer, or the C2 receiver. The pad restarts (also Home + M held 3 s).' },
+  stick_deadzone: { label: 'Dead zone', kind: 'range', fmt: v => `${v} %`, group: 'stick', help: 'Inner, radial.' },
+  stick_outer: { label: 'Outer dead zone', kind: 'range', fmt: v => `${v} %`, group: 'stick', help: 'Full output this far before the edge.' },
+  stick_anti_deadzone: { label: 'Anti-dead zone', kind: 'range', fmt: v => `${v} %`, group: 'stick', help: 'Output starts here past the dead zone, for games with one of their own.' },
+  stick_curve: { label: 'Response curve', kind: 'enum', opts: { 0: 'Linear', 1: 'Curve ^1.5', 2: 'Curve ^2', 3: 'Curve ^3' }, group: 'stick', help: 'Finer control near the centre.' },
+  trigger_deadzone: { label: 'Dead zone', kind: 'range', fmt: v => `${v} %`, group: 'trigger' },
+  trigger_outer: { label: 'Outer dead zone', kind: 'range', fmt: v => `${v} %`, group: 'trigger', help: 'Full this far before the end.' },
+  hair_trigger: { label: 'Hair trigger', kind: 'bool', group: 'trigger', help: 'Full as soon as it is past the dead zone (10 % of the travel at least).' },
+  turbo_rate: { label: 'Turbo speed', kind: 'range', fmt: v => `${v} / s`, help: 'Presses per second for turbo buttons (Buttons tab).' },
+};
+
+/* ---- Small helpers ------------------------------------------------------- */
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const u16 = (b, i) => b[i] | b[i + 1] << 8;
+const s16 = (b, i) => (u16(b, i) << 16) >> 16;
+const str = (b, i, n) => new TextDecoder().decode(b.slice(i, i + n)).split('\0')[0];
+const toHex = b => Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null && v !== false) e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids.flat()) if (k !== null && k !== undefined) e.append(k);
+  return e;
+}
+let toastTimer;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+}
+class PadError extends Error {
+  constructor(status, payload) { super(STATUS[status] || `status ${status}`); this.status = status; this.payload = payload; }
+}
+
+/* ---- Transports: send a 47-byte request body, deliver 63-byte replies ----- */
+class HidLink {
+  constructor(device) { this.dev = device; this.kind = 'hid'; this.onReply = null; this.onClose = null; }
+  async open() {
+    if (!this.dev.opened) await this.dev.open();
+    this.handler = e => {
+      if (e.device === this.dev && e.reportId === 0x02) {
+        const d = new Uint8Array(e.data.buffer, e.data.byteOffset, e.data.byteLength);
+        if (d[0] === CMD && this.onReply) this.onReply(d.slice());
+      }
+    };
+    this.dev.addEventListener('inputreport', this.handler);
+    this.gone = e => { if (e.device === this.dev && this.onClose) this.onClose(); };
+    navigator.hid.addEventListener('disconnect', this.gone);
+  }
+  name() { return this.dev.productName || 'HID device'; }
+  async send(body) { await this.dev.sendReport(0x03, body); }
+  async close() {
+    this.dev.removeEventListener('inputreport', this.handler);
+    navigator.hid.removeEventListener('disconnect', this.gone);
+    try { await this.dev.close(); } catch (_) {}
+  }
+}
+
+class SerialLink {
+  constructor(port) { this.port = port; this.kind = 'serial'; this.onReply = null; this.onClose = null; this.onLine = null; }
+  async open() {
+    await this.port.open({ baudRate: 115200 });           /* CDC ignores the rate */
+    this.writer = this.port.writable.getWriter();
+    this.reading = this.readLoop();
+  }
+  name() {
+    const i = this.port.getInfo();
+    return i.usbVendorId === 0x3537 && i.usbProductId === 0x100B ? 'receiver log port' :
+      `log port ${(i.usbVendorId || 0).toString(16).padStart(4, '0')}:${(i.usbProductId || 0).toString(16).padStart(4, '0')}`;
+  }
+  async readLoop() {
+    const dec = new TextDecoder();
+    let buf = '';
+    try {
+      while (this.port.readable) {
+        this.reader = this.port.readable.getReader();
+        try {
+          for (;;) {
+            const { value, done } = await this.reader.read();
+            if (done) break;
+            buf += dec.decode(value, { stream: true });
+            let n;
+            while ((n = buf.indexOf('\n')) >= 0) {
+              const line = buf.slice(0, n).replace(/\r$/, '');
+              buf = buf.slice(n + 1);
+              const m = /cfg> ([0-9a-f]+)/.exec(line);
+              if (m && this.onReply) {
+                const d = new Uint8Array(63);
+                const bytes = m[1].match(/../g).map(h => parseInt(h, 16));
+                d.set(bytes.slice(0, 63));
+                this.onReply(d);
+              }
+              if (this.onLine) this.onLine(line, !!m);
+            }
+          }
+        } finally {
+          this.reader.releaseLock();
+        }
+        if (this.closing) break;
+      }
+    } catch (_) { /* the port went away */ }
+    if (!this.closing && this.onClose) this.onClose();
+  }
+  async send(body) {
+    await this.writer.write(new TextEncoder().encode(`\ncfg ${toHex(body)}\n`));
+  }
+  async close() {
+    this.closing = true;
+    try { await this.reader?.cancel(); } catch (_) {}
+    try { this.writer.releaseLock(); } catch (_) {}
+    try { await this.reading; } catch (_) {}
+    try { await this.port.close(); } catch (_) {}
+  }
+}
+
+/* ---- The protocol client: one request at a time, matched by seq ---------- */
+class Pad {
+  constructor(link) {
+    this.link = link;
+    this.seq = Math.floor(Math.random() * 256);
+    this.queue = Promise.resolve();
+    this.waiting = null;
+    link.onReply = d => {
+      const w = this.waiting;
+      if (w && d[1] === w.seq && d[2] === w.op) { this.waiting = null; w.resolve(d); }
+    };
+  }
+  /* Resolves to the payload (Uint8Array, from byte 4); throws PadError on a
+   * status (unless allow includes it: then {status, payload}). */
+  request(op, payload = [], { allow = [], timeout = 400, tries = 4 } = {}) {
+    const run = async () => {
+      this.seq = (this.seq + 1) & 0xFF;
+      const seq = this.seq;
+      const body = new Uint8Array(47);
+      body.set([CMD, seq, op, ...payload]);
+      for (let t = 0; t < tries; t++) {
+        const got = new Promise(resolve => { this.waiting = { seq, op, resolve }; });
+        await this.link.send(body);
+        const d = await Promise.race([got, sleep(timeout).then(() => null)]);
+        if (!d) continue;
+        const status = d[3], p = d.slice(4);
+        if (allow.includes(status)) return { status, payload: p };
+        if (status) throw new PadError(status, p);
+        return p;
+      }
+      this.waiting = null;
+      throw new Error('no reply from the pad');
+    };
+    const r = this.queue.then(run, run);
+    this.queue = r.catch(() => {});
+    return r;
+  }
+}
+
+/* ---- App state ----------------------------------------------------------- */
+let link = null, pad = null, info = null, settings = [], byName = {}, calTimer = null;
+
+function setConn(state, text) {
+  $('dot').className = 'status-dot' + (state === 'on' ? ' on' : state === 'busy' ? ' busy' : '');
+  $('conn-text').textContent = text;
+}
+
+function parseInfo(p) {
+  return {
+    proto: p[0], fw: str(p, 1, 16), board: str(p, 17, 16), mode: p[33], usb: !!p[34],
+    mv: u16(p, 35), percent: p[37], plug: p[38], count: p[39], profile: p[40],
+    charger: p[41], power: p[42], release: p[0] >= 3 ? `${p[43]}.${p[44]}.${p[45]}` : null,
+  };
+}
+
+async function connect(newLink) {
+  await disconnect(true);
+  link = newLink;
+  setConn('busy', 'Connecting…');
+  try {
+    await link.open();
+  } catch (e) {
+    setConn('', 'Not connected');
+    link = null;
+    toast(`Could not open: ${e.message}`);
+    return;
+  }
+  link.onClose = () => { toast('The pad went away (restart, sleep or cable).'); disconnect(); };
+  pad = new Pad(link);
+  $('tab-log-btn').classList.toggle('hidden', link.kind !== 'serial');
+  if (link.kind === 'serial') link.onLine = logLine;
+  try {
+    await loadAll();
+  } catch (e) {
+    toast(e.message === 'no reply from the pad'
+      ? 'No reply: is the pad connected (and in Steam mode, for the HID connection)?' : e.message);
+    await disconnect();
+  }
+}
+
+async function disconnect(quiet) {
+  stopCalPoll();
+  if (link) {
+    const l = link;
+    link = null;
+    pad = null;
+    await l.close();
+  }
+  $('app').classList.add('hidden');
+  $('intro').classList.remove('hidden');
+  $('btn-disconnect').classList.add('hidden');
+  if (!quiet) setConn('', 'Not connected');
+}
+
+async function loadAll() {
+  setConn('busy', 'Reading settings…');
+  info = parseInfo(await pad.request(OP.INFO));
+  const list = [];
+  for (let i = 0; i < info.count; i++) {
+    const p = await pad.request(OP.LIST, [i]);
+    list.push({ key: p[0], flags: p[1], min: u16(p, 2), max: u16(p, 4), def: u16(p, 6), value: u16(p, 8), name: str(p, 10, 24) });
+    setConn('busy', `Reading settings… ${i + 1} / ${info.count}`);
+  }
+  settings = list;
+  byName = Object.fromEntries(list.map(s => [s.name, s]));
+  $('intro').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  $('btn-disconnect').classList.remove('hidden');
+  renderAll();
+  setConn('on', `${info.board} · ${link.name()}`);
+}
+
+/* ---- Rendering ----------------------------------------------------------- */
+function renderInfo() {
+  const rel = info.release ? `${info.release}` : '–';
+  const items = [
+    ['Pad', info.board], ['Firmware', `${rel} (${info.fw})`], ['Mode', MODES[info.mode] ?? info.mode],
+    ['Connected over', info.usb ? 'USB' : 'Bluetooth'],
+    ['Battery', `${info.percent} % · ${info.mv} mV · ${PLUG[info.plug] ?? info.plug}`],
+    ['Profile', `${(byName.profile?.value ?? info.profile) + 1}`],
+  ];
+  const fill = (id, extra = []) => {
+    $(id).replaceChildren(...items.concat(extra).map(([k, v]) => el('div', {}, el('span', {}, k), v)));
+  };
+  fill('info');
+  fill('device-info', [['Protocol', `${info.proto}`], ['Settings', `${info.count}`],
+    ['USB power', info.power & 1 ? 'yes' : 'no'], ['Dock', info.power & 2 ? 'on the dock' : 'no']]);
+}
+
+function settingRow(s) {
+  const m = META[s.name] || { label: s.name, kind: s.max === 1 && s.min === 0 ? 'bool' : 'number' };
+  const fmt = v => m.fmt ? m.fmt(v) : m.kind === 'enum' ? (m.opts[v] ?? v) : m.kind === 'bool' ? (v ? 'on' : 'off') : `${v}`;
+  const val = el('span', { class: 'val' }, fmt(s.value));
+  let input;
+  const commit = async v => {
+    if (s.flags & F_RESTART) {
+      const what = m.kind === 'enum' ? m.opts[v] : v;
+      if (!confirm(`${m.label}: ${what}. The pad restarts to apply it (it disconnects and comes back). Go on?`)) {
+        input.value = s.value; if (input.type === 'checkbox') input.checked = !!s.value;
+        return;
+      }
+    }
+    try {
+      const r = await pad.request(OP.SET, [s.key, v & 0xFF, v >> 8], { allow: [6] });
+      const p = r.payload || r;
+      s.value = u16(p, 1);
+      val.textContent = fmt(s.value);
+      if (r.status === 6) toast('Set, but the pad could not save it.');
+      if (s.flags & F_RESTART) {
+        toast('Applied: the pad restarts now. Reconnect when it is back.');
+        setTimeout(() => disconnect(), 400);
+        return;
+      }
+      if (s.name === 'profile') { await reloadProfile(); return; }
+      if (m.group) drawPlots();
+    } catch (e) {
+      toast(`${m.label}: ${e.message}`);
+      input.value = s.value;
+    }
+  };
+  if (m.kind === 'range') {
+    input = el('input', { type: 'range', min: s.min, max: s.max, value: s.value });
+    input.addEventListener('input', () => { val.textContent = fmt(+input.value); if (m.group) drawPlots(+input.value, s.name); });
+    input.addEventListener('change', () => commit(+input.value));
+  } else if (m.kind === 'enum') {
+    input = el('select', {}, Object.entries(m.opts).filter(([k]) => +k >= s.min && +k <= s.max)
+      .map(([k, label]) => el('option', { value: k, selected: +k === s.value }, label)));
+    input.addEventListener('change', () => commit(+input.value));
+  } else if (m.kind === 'bool') {
+    input = el('input', { type: 'checkbox', checked: !!s.value });
+    input.addEventListener('change', () => commit(input.checked ? 1 : 0));
+  } else {
+    input = el('input', { type: 'number', min: s.min, max: s.max, value: s.value, style: 'width: 90px' });
+    input.addEventListener('change', () => {
+      const v = Math.max(s.min, Math.min(s.max, Math.round(+input.value)));
+      input.value = v;
+      commit(v);
+    });
+  }
+  input.id = `set-${s.name}`;
+  const kids = [el('label', { for: input.id }, m.label), input, val];
+  if (m.help || s.flags & F_RESTART) kids.push(el('div', { class: 'help' }, m.help || 'Restarts the pad.'));
+  return el('div', { class: 'setting' }, kids);
+}
+
+function renderGeneral() {
+  const rows = settings.filter(s => !(s.flags & F_PROFILE) && s.name !== 'profile').map(settingRow);
+  $('tab-general').replaceChildren(el('h2', {}, 'General'), ...rows);
+}
+
+function renderProfile() {
+  const p = byName.profile;
+  if (p) {
+    $('profile-picker').replaceChildren(...[0, 1, 2, 3].map(i =>
+      el('button', { class: i === p.value ? 'primary' : '', onclick: () => setProfile(i) }, `${i + 1}`)));
+  }
+  const prof = settings.filter(s => s.flags & F_PROFILE);
+  const group = g => prof.filter(s => META[s.name]?.group === g).map(settingRow);
+  $('stick-settings').replaceChildren(...group('stick'));
+  $('trigger-settings').replaceChildren(...group('trigger'));
+  const other = prof.filter(s => !META[s.name]?.group && !/^(map|turbo)_/.test(s.name) || s.name === 'turbo_rate');
+  $('profile-other').replaceChildren(other.length ? el('h3', {}, 'Other') : '', ...other.map(settingRow));
+  drawPlots();
+}
+
+function renderButtons() {
+  const p = byName.profile;
+  $('buttons-profile').textContent = p ? `· profile ${p.value + 1}` : '';
+  const rows = BUTTONS.map((b, i) => {
+    const map = byName[`map_${b}`], turbo = byName[`turbo_${b}`];
+    if (!map) return null;
+    const sel = el('select', {}, BUTTONS.map((t, j) => el('option', { value: j, selected: map.value === j }, BUTTON_LABEL[t])),
+      el('option', { value: BUTTONS.length, selected: map.value >= BUTTONS.length }, '— nothing —'));
+    sel.addEventListener('change', async () => {
+      try {
+        const p = await pad.request(OP.SET, [map.key, +sel.value, 0]);
+        map.value = u16(p, 1);
+      } catch (e) { toast(e.message); sel.value = map.value; }
+    });
+    const tb = el('input', { type: 'checkbox', checked: !!turbo?.value });
+    tb.addEventListener('change', async () => {
+      try {
+        const p = await pad.request(OP.SET, [turbo.key, tb.checked ? 1 : 0, 0]);
+        turbo.value = u16(p, 1);
+      } catch (e) { toast(e.message); tb.checked = !!turbo.value; }
+    });
+    const changed = map.value !== i ? el('span', { class: 'chip', style: 'margin-left:6px' }, 'remapped') : null;
+    return el('tr', {}, el('td', {}, BUTTON_LABEL[b], changed), el('td', {}, sel), el('td', {}, turbo ? tb : '–'));
+  });
+  $('buttons-body').replaceChildren(...rows.filter(Boolean));
+}
+
+function renderAll() {
+  renderInfo();
+  renderGeneral();
+  renderProfile();
+  renderButtons();
+  showCalStored();
+}
+
+async function setProfile(i) {
+  const p = byName.profile;
+  try {
+    const r = await pad.request(OP.SET, [p.key, i, 0]);
+    p.value = u16(r, 1);
+    await reloadProfile();
+  } catch (e) { toast(e.message); }
+}
+
+async function reloadProfile() {
+  setConn('busy', 'Reading the profile…');
+  for (const s of settings.filter(s => s.flags & F_PROFILE)) {
+    const p = await pad.request(OP.GET, [s.key]);
+    s.value = u16(p, 1);
+  }
+  info.profile = byName.profile?.value ?? info.profile;
+  renderInfo();
+  renderProfile();
+  renderButtons();
+  setConn('on', `${info.board} · ${link.name()}`);
+}
+
+/* ---- Response plots: the firmware's shaping (core/gp_tuning.c) in floats -- */
+function stickOut(r, p) {
+  const inner = p.stick_deadzone / 100, end = 1 - p.stick_outer / 100, anti = p.stick_anti_deadzone / 100;
+  if (r <= inner) return 0;
+  let t = end > inner ? Math.min(1, (r - inner) / (end - inner)) : 1;
+  t = [t, t ** 1.5, t * t, t ** 3][p.stick_curve] ?? t;
+  return Math.min(1, anti + t * (1 - anti));
+}
+function triggerOut(v, p) {
+  const dz = p.trigger_deadzone / 100, end = 1 - p.trigger_outer / 100;
+  if (p.hair_trigger) return v > Math.max(dz, 0.1) ? 1 : 0;
+  if (v <= dz) return 0;
+  return Math.min(1, end > dz ? (v - dz) / (end - dz) : 1);
+}
+function plot(canvas, f) {
+  const c = canvas.getContext('2d'), w = canvas.width, h = canvas.height, pad = 30;
+  const css = getComputedStyle(document.documentElement);
+  c.clearRect(0, 0, w, h);
+  c.strokeStyle = css.getPropertyValue('--plot-ref'); c.lineWidth = 2;
+  c.strokeRect(pad, pad, w - 2 * pad, h - 2 * pad);
+  c.setLineDash([6, 6]);
+  c.beginPath(); c.moveTo(pad, h - pad); c.lineTo(w - pad, pad); c.stroke();
+  c.setLineDash([]);
+  c.strokeStyle = css.getPropertyValue('--plot'); c.lineWidth = 4;
+  c.beginPath();
+  for (let i = 0; i <= 200; i++) {
+    const x = i / 200, y = f(x);
+    const px = pad + x * (w - 2 * pad), py = h - pad - y * (h - 2 * pad);
+    i ? c.lineTo(px, py) : c.moveTo(px, py);
+  }
+  c.stroke();
+  c.fillStyle = css.getPropertyValue('--muted'); c.font = '22px system-ui';
+  c.fillText('0', pad - 20, h - pad + 20); c.fillText('100 %', w - pad - 56, h - pad + 24);
+}
+function drawPlots(live, liveName) {
+  const v = n => (n === liveName ? live : byName[n]?.value) ?? 0;
+  const p = Object.fromEntries(['stick_deadzone', 'stick_outer', 'stick_anti_deadzone', 'stick_curve',
+    'trigger_deadzone', 'trigger_outer', 'hair_trigger'].map(n => [n, v(n)]));
+  plot($('stick-plot'), x => stickOut(x, p));
+  plot($('trigger-plot'), x => triggerOut(x, p));
+}
+
+/* ---- Calibration --------------------------------------------------------- */
+const partNames = m => Object.entries(CAL_PARTS).filter(([b]) => m & b).map(([, n]) => n).join(', ') || 'none';
+
+async function showCalStored() {
+  try {
+    const p = await pad.request(OP.CAL_GET);
+    const stored = p[0];
+    const kids = [el('p', {}, 'Stored: ', el('b', {}, partNames(stored)))];
+    if (stored & 1) {
+      kids.push(el('p', { class: 'small muted' }, AXES.map((a, i) =>
+        `${a} centre ${u16(p, 1 + 6 * i)}, travel +${u16(p, 3 + 6 * i)} / −${u16(p, 5 + 6 * i)}`).join(' · ')));
+    }
+    if (stored & 2) {
+      kids.push(el('p', { class: 'small muted' }, ['LT', 'RT'].map((t, i) =>
+        `${t} rest ${u16(p, 25 + 4 * i)}, travel ${u16(p, 27 + 4 * i)}`).join(' · ')));
+    }
+    if (stored & 4) kids.push(el('p', { class: 'small muted' }, `Gyro bias ${s16(p, 33)}, ${s16(p, 35)}, ${s16(p, 37)}`));
+    if (stored) {
+      kids.push(el('div', { class: 'row' }, Object.entries(CAL_PARTS).filter(([b]) => stored & b).map(([b, n]) =>
+        el('button', { class: 'danger', onclick: () => clearCal(+b, n) }, `Clear ${n}`))));
+    }
+    $('cal-stored').replaceChildren(...kids);
+  } catch (e) {
+    $('cal-stored').replaceChildren(el('p', { class: 'muted' }, `Calibration: ${e.message}`));
+  }
+}
+
+async function clearCal(mask, name) {
+  if (!confirm(`Clear the stored ${name} calibration? The pad learns it at runtime again.`)) return;
+  try {
+    const r = await pad.request(OP.CAL_CLEAR, [mask], { allow: [6] });
+    if (r.status === 6) toast('Cleared, but the pad could not save it.');
+    showCalStored();
+  } catch (e) { toast(e.message); }
+}
+
+function stopCalPoll() {
+  if (calTimer) { clearTimeout(calTimer); calTimer = null; }
+}
+
+async function calStart() {
+  const mask = [...$('cal-parts').querySelectorAll('input:checked')].reduce((m, c) => m | +c.value, 0);
+  if (!mask) { toast('Pick at least one part.'); return; }
+  try {
+    await pad.request(OP.CAL_START, [mask]);
+  } catch (e) { toast(e.message); return; }
+  $('cal-live').classList.remove('hidden');
+  $('cal-start').disabled = true;
+  $('cal-cancel').disabled = false;
+  calPoll();
+}
+
+async function calPoll() {
+  stopCalPoll();
+  let p;
+  try { p = await pad.request(OP.CAL_STATUS); } catch (e) { toast(e.message); return; }
+  const phase = p[0], parts = p[1], progress = p[3], restarts = p[4];
+  const step = $('cal-step');
+  $('cal-finish').disabled = !(phase === 2 || phase === 3);
+  const restBar = $('cal-rest');
+  restBar.classList.toggle('hidden', phase !== 1);
+  if (phase === 1) {
+    step.textContent = `Step 1: let go of the sticks and triggers and lay the pad flat, still. ${progress} %` +
+      (restarts ? ` (moved: started over ${restarts}×)` : '');
+    restBar.firstElementChild.style.width = `${progress}%`;
+  } else if (phase === 2) {
+    step.textContent = 'Step 2: roll each stick slowly around its edge a few times, press each trigger all the way. Then Finish.';
+  } else if (phase === 3) {
+    step.textContent = 'Done measuring: Finish to store it.';
+  } else {
+    step.textContent = 'Not running.';
+  }
+  const ranges = [];
+  if (phase >= 2 && parts & 1) {
+    ranges.push(el('h3', {}, 'Stick travel (needs 6000 each way)'));
+    for (let i = 0; i < 4; i++) {
+      const o = 6 + 8 * i, now = u16(p, o), lo = u16(p, o + 2), c = u16(p, o + 4), hi = u16(p, o + 6);
+      const up = hi - c, down = c - lo, ok = up >= 6000 && down >= 6000;
+      const span = 13000, pct = v => `${50 + 50 * Math.max(-1, Math.min(1, v / span))}%`;
+      const bar = el('div', { class: 'bar' },
+        el('div', { class: 'fill', style: `left:${pct(-down)}; right:calc(100% - ${pct(up)})` }),
+        el('div', { class: 'need', style: `left:${pct(-6000)}` }), el('div', { class: 'need', style: `left:${pct(6000)}` }),
+        el('div', { class: 'mark', style: `left:${pct(now - c)}` }));
+      ranges.push(el('div', { class: 'cal-axis' }, AXES[i], bar,
+        el('span', { class: ok ? 'ok small' : 'short small' }, `−${down} / +${up}`)));
+    }
+  }
+  if (phase >= 2 && parts & 2) {
+    ranges.push(el('h3', {}, 'Trigger travel (needs 200)'));
+    for (let i = 0; i < 2; i++) {
+      const o = 38 + 6 * i, now = u16(p, o), rest = u16(p, o + 2), pressed = u16(p, o + 4);
+      const travel = rest - pressed, ok = travel >= 200;
+      const pct = v => `${Math.max(0, Math.min(100, v / 480 * 100))}%`;
+      const bar = el('div', { class: 'bar' }, el('div', { class: 'fill', style: `left:0; width:${pct(travel)}` }),
+        el('div', { class: 'need', style: `left:${pct(200)}` }), el('div', { class: 'mark', style: `left:${pct(rest - now)}` }));
+      ranges.push(el('div', { class: 'cal-axis' }, ['LT', 'RT'][i], bar, el('span', { class: ok ? 'ok small' : 'short small' }, `${travel}`)));
+    }
+  }
+  if (phase >= 2 && parts & 4) {
+    ranges.push(el('p', { class: 'small muted' }, `Gyro bias found: ${s16(p, 50)}, ${s16(p, 52)}, ${s16(p, 54)}`));
+  }
+  $('cal-ranges').replaceChildren(...ranges);
+  if (phase === 1 || phase === 2 || phase === 3) calTimer = setTimeout(calPoll, link?.kind === 'serial' ? 200 : 150);
+}
+
+async function calFinish() {
+  try {
+    const r = await pad.request(OP.CAL_FINISH, [], { allow: [3, 6] });
+    if (r.status === 3) { toast(`Not far enough yet: ${partNames(r.payload[0])}. Keep moving, then Finish again.`); return; }
+    toast(r.status === 6 ? 'In use now, but NOT saved: the pad could not write it. Run it again.' :
+      `Stored. Calibrated: ${partNames(r.payload[1])}.`);
+    calEnd();
+  } catch (e) { toast(e.message); }
+}
+
+async function calCancel() {
+  try { await pad.request(OP.CAL_CANCEL); } catch (_) {}
+  toast('Cancelled: nothing stored.');
+  calEnd();
+}
+
+function calEnd() {
+  stopCalPoll();
+  $('cal-live').classList.add('hidden');
+  $('cal-start').disabled = false;
+  $('cal-finish').disabled = true;
+  $('cal-cancel').disabled = true;
+  showCalStored();
+}
+
+/* ---- Device ------------------------------------------------------------- */
+async function refreshInfo() {
+  try { info = parseInfo(await pad.request(OP.INFO)); renderInfo(); } catch (e) { toast(e.message); }
+}
+
+async function maintenance(op, ask, after) {
+  if (ask && !confirm(ask)) return;
+  try {
+    await pad.request(op);
+    toast(after);
+    if (op === OP.DEFAULTS) { await loadAll(); return; }
+    setTimeout(() => disconnect(), 400);
+  } catch (e) {
+    toast(e.status === 4 ? 'Not possible now: the bootloader needs the USB cable.' : e.message);
+  }
+}
+
+/* ---- Log (serial) ------------------------------------------------------- */
+const LOG_MAX = 2000;
+function logLine(line, isCfg) {
+  if (isCfg && !$('log-cfg').checked) return;
+  const log = $('log');
+  const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+  log.append(line + '\n');
+  while (log.childNodes.length > LOG_MAX) log.removeChild(log.firstChild);
+  if (stick) log.scrollTop = log.scrollHeight;
+}
+
+/* ---- Wiring ------------------------------------------------------------- */
+const HID_FILTERS = [{ vendorId: 0x2E8A, productId: 0x10C6 }];
+const SERIAL_FILTERS = [
+  { usbVendorId: 0x1209, usbProductId: 0x0001 }, { usbVendorId: 0x2E8A, usbProductId: 0x10C6 },
+  { usbVendorId: 0x3537, usbProductId: 0x1053 }, { usbVendorId: 0x3537, usbProductId: 0x100B },
+];
+
+$('btn-hid').addEventListener('click', async () => {
+  try {
+    const [dev] = await navigator.hid.requestDevice({ filters: HID_FILTERS });
+    if (dev) connect(new HidLink(dev));
+  } catch (e) { toast(e.message); }
+});
+$('btn-serial').addEventListener('click', async () => {
+  try {
+    const port = await navigator.serial.requestPort({ filters: SERIAL_FILTERS });
+    connect(new SerialLink(port));
+  } catch (e) { if (e.name !== 'NotFoundError') toast(e.message); }
+});
+$('btn-disconnect').addEventListener('click', () => disconnect());
+$('tabs').addEventListener('click', e => {
+  const t = e.target.closest('button[data-tab]');
+  if (!t) return;
+  for (const b of $('tabs').querySelectorAll('button')) b.classList.toggle('active', b === t);
+  for (const s of document.querySelectorAll('section.tab')) s.classList.toggle('hidden', s.id !== `tab-${t.dataset.tab}`);
+  if (t.dataset.tab === 'cal' && pad) showCalStored();
+});
+$('cal-start').addEventListener('click', calStart);
+$('cal-finish').addEventListener('click', calFinish);
+$('cal-cancel').addEventListener('click', calCancel);
+$('dev-refresh').addEventListener('click', refreshInfo);
+$('dev-defaults').addEventListener('click', () => maintenance(OP.DEFAULTS,
+  'All settings of all profiles back to their defaults (not the mode or link)?', 'Defaults restored.'));
+$('dev-reboot').addEventListener('click', () => maintenance(OP.REBOOT, null, 'Restarting: reconnect when it is back.'));
+$('dev-bootloader').addEventListener('click', () => maintenance(OP.BOOTLOADER,
+  'Enter the USB bootloader? The pad stops working until an image is written (sudo fw-re/jlflash.sh write …) or it is reset.',
+  'The pad is in the bootloader now.'));
+$('log-clear').addEventListener('click', () => $('log').replaceChildren());
+
+/* What this browser can do, and devices allowed before (no chooser needed). */
+(async () => {
+  const hid = 'hid' in navigator, serial = 'serial' in navigator;
+  $('btn-hid').disabled = !hid;
+  $('btn-serial').disabled = !serial;
+  $('support-line').textContent = hid && serial ? '' :
+    `This browser has ${hid ? '' : 'no '}WebHID and ${serial ? '' : 'no '}WebSerial: use Chrome or Edge${location.protocol === 'http:' && location.hostname !== 'localhost' ? ', over https or localhost' : ''}.`;
+  try {
+    const known = hid ? (await navigator.hid.getDevices()).filter(d => d.vendorId === 0x2E8A && d.productId === 0x10C6) : [];
+    if (known.length) {
+      $('support-line').textContent = '';
+      const b = el('button', { class: 'primary' }, `Reconnect ${known[0].productName}`);
+      b.addEventListener('click', () => connect(new HidLink(known[0])));
+      $('intro').append(el('div', { class: 'row', style: 'margin-top:10px' }, b));
+    }
+    const ports = serial ? await navigator.serial.getPorts() : [];
+    for (const port of ports) {
+      const b = el('button', {}, `Reconnect ${new SerialLink(port).name()}`);
+      b.addEventListener('click', () => connect(new SerialLink(port)));
+      $('intro').append(el('div', { class: 'row', style: 'margin-top:10px' }, b));
+    }
+  } catch (_) {}
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (pad) drawPlots(); });
+})();
+</script>
+</body>
+</html>
