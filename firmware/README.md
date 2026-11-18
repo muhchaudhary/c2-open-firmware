@@ -132,7 +132,9 @@ product string.
 2. Build both boards and test them on the hardware.
 3. Copy each into `firmware/images/` with its sidecar: `build/c2.flash.bin`
    and `build/c2.json` → `C2_pad.flash.bin`, `C2_pad.json`; `dongle.*` →
-   `C2_receiver.*`. Add the changelog entry, commit, merge.
+   `C2_receiver.*`. Add the changelog entry, commit, and merge with a merge
+   commit (not squash or rebase: each sidecar's commit must stay in main's
+   history).
 4. Run the **release** workflow (Actions, on main). It rebuilds every image
    at the commit in its sidecar, fails unless each is byte-identical to the
    committed one, and uploads the release folder (images, ELFs, sidecars,
