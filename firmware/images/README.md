@@ -40,6 +40,12 @@ What each image added, newest first; "tested" means on the pad or receiver.
 
 ### The pad (`C2_pad.flash.bin`)
 
+- **0.2.2** (2026-11-18): the first public release, and the first built
+  reproducibly (the release workflow rebuilds it byte for byte). With only
+  the debug log on USB (charging mode) the pad is now `3537:01AB` "Cyclone 2
+  SI debug log", one of its own GameSir IDs, not pid.codes' test ID
+  `1209:0001`. The SDK's two build-date log lines print a fixed date. No
+  other change from 0.2.1.
 - **0.2.1** (2026-11-17): the same firmware as 0.2.0, packed by
   `firmware/mkimage.py` from the SDK's files instead of GameSir's v19
   image: byte-identical to it but for `uboot.boot`'s build time (dead code)
@@ -94,6 +100,10 @@ What each image added, newest first; "tested" means on the pad or receiver.
 
 ### The receiver (`C2_receiver.flash.bin`)
 
+- **0.2.2** (2026-11-18): the first public release, built reproducibly.
+  With no pad linked it is now `3537:0575` "C2 receiver" (stock's ID in that
+  state), not `1209:0001`; its Bluetooth Device ID too. No other change
+  from 0.2.1.
 - **0.2.1** (2026-11-17): the app area alone (192,512 B at SPI
   0x11000), no longer a copy of the chip's installed image: its loader at
   0x0, its header at 0x10000 and the installer record stay on the chip;
