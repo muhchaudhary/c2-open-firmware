@@ -21,6 +21,7 @@ void gp_leds_set_link(int link);        /* lit player LEDs: Bluetooth blue, USB 
 void gp_leds_set_searching(int on);     /* receiver link, not connected: all four player LEDs purple */
 /* Poll, before gp_leds_home_anim: low battery, Home flashes red over the rest. */
 void gp_leds_low_battery(int low, int connected);
+void gp_leds_set_lowbat_rgb(const u8 *rgb);     /* the warning's colour on Home (default red) */
 
 /* From the host (sinput_command), any context. */
 void gp_leds_set_player(u8 player);     /* 0 = unassigned, 1..4 */

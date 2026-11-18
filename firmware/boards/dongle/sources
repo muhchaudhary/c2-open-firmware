@@ -5,3 +5,4 @@ core/gp_sinput_desc.c
 core/gp_link.c
 core/gp_xinput_desc.c
 core/gp_ds4_desc.c
+core/gp_switch_desc.c

@@ -631,7 +631,7 @@ class Window(Gtk.ApplicationWindow):
         dev = c2led.find_hidraw()
         try:
             if not dev:
-                raise OSError('C2 not found: is it on, connected, in Steam mode (Home + Y held 3 s)?')
+                raise OSError('C2 not found: is it on, connected, in Steam mode (Home + A held 3 s)?')
             c2led.send(dev, payload)
             self.show_status(f'Sent to {dev}', False)
             self.save_later(state)

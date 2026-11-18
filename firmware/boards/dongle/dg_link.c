@@ -9,7 +9,9 @@
  *    round trip to the pad). Until one is in, the receiver asks for it.
  *  - The hello's mode picks what the receiver is on USB (dg_usb.c): Steam
  *    SInput, Xbox the wired Xbox 360 pad (the pad's xinput_encode_state),
- *    DS4 the DualShock 4 (the pad's ds4_encode_usb, battery in the state).
+ *    DS4 the DualShock 4 (the pad's ds4_encode_usb, battery in the state),
+ *    Switch the Pro Controller (core/gp_switch_desc.c's protocol, run in
+ *    dg_usb.c: every state feeds it, it says what goes out).
  *  - Ping (`03 8E` from the host, tools/c2lat.py): ask the pad for a hello,
  *    answer `02 8E` when it comes: a round trip over the air, timed in
  *    stages (dg_lat.echo, as the features round trip was before).
@@ -82,6 +84,8 @@ static void dg_link_state(const u8 *p, int len)
         u8 x[XINPUT_REPORT_LEN];
         xinput_encode_state(x, &s);                  /* the pad's own wired-Xbox encoder */
         dg_usb_put(DG_ID_XINPUT, x, sizeof(x));
+    } else if (dg_usb_switch()) {
+        dg_usb_switch_state(&s, &dg_batt, jiffies_msec());
     } else if (dg_usb_ds4()) {
         static u8 counter;
         u8 rep[DS4_USB_REPORT_LEN];
@@ -105,7 +109,8 @@ static void dg_link_hello(const u8 *p, int len)
     }
     if (!dg_have_hello || h.mode != dg_hello.mode) {
         gp_log("link: hello v%u, mode %s, serial %02X%02X%02X%02X%02X%02X, tick %u us", h.version,
-               h.mode == GP_MODE_XBOX ? "Xbox" : h.mode == GP_MODE_DS4 ? "DS4" : "Steam", h.serial[0], h.serial[1], h.serial[2], h.serial[3],
+               h.mode == GP_MODE_XBOX ? "Xbox" : h.mode == GP_MODE_DS4 ? "DS4" :
+               h.mode == GP_MODE_SWITCH ? "Switch" : "Steam", h.serial[0], h.serial[1], h.serial[2], h.serial[3],
                h.serial[4], h.serial[5], h.tick_us);
     }
     dg_hello = h;

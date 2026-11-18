@@ -27,6 +27,7 @@ our firmware too: it talks to the receiver over its own link protocol.
   | pad in Steam mode | `2E8A:10C6` "GameSir C2 receiver" | SInput gamepad (+ the vendor collection) + debug log |
   | pad in Xbox mode | `3537:100B` "Xbox 360 Controller for Windows" | XInput (stock's receiver ID and Microsoft OS descriptors) + debug log |
   | pad in DS4 mode | `054C:09CC` "Sony Interactive Entertainment Wireless Controller" | a DualShock 4 as the pad is on its cable (`docs/ds4.md`; + the vendor collection, its `0F 17 55 88` also on the OUT endpoint) + debug log |
+  | pad in Switch mode | `057E:2009` "Nintendo Co., Ltd. Pro Controller" (bcdDevice 0x0210; the pad's own is 0x0200) | a Pro Controller as the pad is on its cable (`docs/switch.md`): its report descriptor alone (no vendor collection), interrupt OUT; the receiver answers the handshake and subcommands itself + debug log |
 
   The mode is saved, so the receiver comes up as the pad's last mode before
   the pad connects. A mode change re-enumerates.
