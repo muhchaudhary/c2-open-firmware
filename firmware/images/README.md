@@ -13,8 +13,8 @@ header stay on the chip (`docs/dongle.md`).
 
 | Image | Device | Release | Built from | sha256 |
 |---|---|---|---|---|
-| `C2_pad.flash.bin` | the Cyclone 2 | 0.2.2 | `c9124b9cd3` | `8b9f06535bb336be00ac581b851d4bc4bff1ea0f7596f071ccb1830a7b1716b4` |
-| `C2_receiver.flash.bin` | the C2 receiver: its app area only | 0.2.2 | `c9124b9cd3` | `00e913d92b75a9bc1b53a4ec777d12c98d03ca7a11aea14cd224fdd5edf7b2ad` |
+| `C2_pad.flash.bin` | the Cyclone 2 | 0.3.0 | `c81aafa72d` | `eb7cc04fb12d6f3fcf271c3ad677dec8fc63f7443d0af11d2ebee8260c91987c` |
+| `C2_receiver.flash.bin` | the C2 receiver: its app area only | 0.3.0 | `c81aafa72d` | `1db68b0b731b3e001dee38f326055076def984f9a56a3b344b0b62169f0c9712` |
 
 Earlier releases (0.2.1 and before) were built before this repository was
 published and aren't here. Building from source: `firmware/README.md`.
@@ -55,7 +55,9 @@ What each image added, newest first; "tested" means on the pad or receiver.
   was white), Home + X Xbox, Home + B DS4. In Switch mode the low-battery
   warning is a dark blink on Home. Tested on Linux over Bluetooth and
   USB (`hid-nintendo`, SDL `testcontroller`: inputs, low / high rumble,
-  the gyro's directions). Not yet on a Switch console.
+  the gyro's directions); the release image tested on the pad (the new
+  combos and colours, Switch mode over Bluetooth, USB and the receiver,
+  INFO 0.3.0). Not yet on a Switch console.
 - **0.2.2** (2026-11-18): the first public release, and the first built
   reproducibly (the release workflow rebuilds it byte for byte). With only
   the debug log on USB (charging mode) the pad is now `3537:01AB` "Cyclone 2

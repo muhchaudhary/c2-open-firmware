@@ -1,11 +1,11 @@
 {
   "board": "c2",
-  "release": "0.2.2",
-  "commit": "c9124b9cd3",
+  "release": "0.3.0",
+  "commit": "c81aafa72d",
   "sdk_commit": "fdc018de81629e21e594d677cf05f87d288be0f0",
   "toolchain": "p7wxhmzj76pb4whp94nz8pbqiqclmkjw-jieli-toolchain-20260730.1",
   "image": "c2.flash.bin",
   "image_bytes": 487424,
-  "app_bytes": 223200,
-  "sha256": "8b9f06535bb336be00ac581b851d4bc4bff1ea0f7596f071ccb1830a7b1716b4"
+  "app_bytes": 226752,
+  "sha256": "eb7cc04fb12d6f3fcf271c3ad677dec8fc63f7443d0af11d2ebee8260c91987c"
 }
