@@ -11,8 +11,13 @@ JieLi SDK's files (`firmware/mkimage.py`, `LICENSING.md`); the receiver's
 is its app area alone, written at SPI 0x11000, while its own loader and
 header stay on the chip (`docs/dongle.md`).
 
-No images are here yet: 0.2.1 and earlier were built before this
-repository was published. Building from source: `firmware/README.md`.
+| Image | Device | Release | Built from | sha256 |
+|---|---|---|---|---|
+| `C2_pad.flash.bin` | the Cyclone 2 | 0.2.2 | `c9124b9cd3` | `8b9f06535bb336be00ac581b851d4bc4bff1ea0f7596f071ccb1830a7b1716b4` |
+| `C2_receiver.flash.bin` | the C2 receiver: its app area only | 0.2.2 | `c9124b9cd3` | `00e913d92b75a9bc1b53a4ec777d12c98d03ca7a11aea14cd224fdd5edf7b2ad` |
+
+Earlier releases (0.2.1 and before) were built before this repository was
+published and aren't here. Building from source: `firmware/README.md`.
 `firmware/build/` is the scratch output of `firmware/build.sh`.
 
 ## Flashing
