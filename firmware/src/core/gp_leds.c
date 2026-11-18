@@ -19,7 +19,7 @@ static const u8 gp_receiver_rgb[3] = {10, 0, 16};
  * whatever it shows otherwise (the host's colour, or the breathing). */
 #define LOWBAT_PERIOD_MS    2000
 #define LOWBAT_ON_MS        300
-static const u8 gp_lowbat_rgb[3] = {40, 0, 0};
+static u8 gp_lowbat_rgb[3] = {40, 0, 0};
 static u8 gp_lowbat, gp_lowbat_lit;
 static u16 gp_lowbat_t;
 
@@ -93,6 +93,11 @@ void gp_leds_low_battery(int low, int connected)
     }
 }
 
+void gp_leds_set_lowbat_rgb(const u8 *rgb)
+{
+    memcpy(gp_lowbat_rgb, rgb, 3);
+}
+
 void gp_leds_set_searching(int on)
 {
     if (on != gp_searching) {
@@ -147,12 +152,12 @@ void gp_leds_set_per_led(const u8 *rgb8, u8 incl_players)
 
 /* Home LED while no host is connected, as stock: it breathes slowly while
  * reconnecting / waiting and flashes in pairing mode, in the colour of the
- * input mode (Steam: white, Xbox: green). Only the Home slot changes; the host's LED
+ * input mode (gp_core.c: Steam yellow, Xbox green, DS4 blue, Switch red). Only the Home slot changes; the host's LED
  * commands only come while connected, so the two never send at once. */
 #define HOME_PEAK           48              /* brightness at the top of a breath / a flash */
 #define BREATH_MS           3000            /* one breath, in and out */
 #define FLASH_MS            400             /* one flash period (on half, off half) */
-static u8 gp_mode_rgb[3] = { 16, 16, 16 };  /* the input mode's colour (Steam: white), 16 = full */
+static u8 gp_mode_rgb[3] = { 16, 16, 16 };  /* the input mode's colour (set at start: gp_core.c), 16 = full */
 
 void gp_leds_set_mode_colour(const u8 *rgb)
 {

@@ -108,12 +108,13 @@ struct gp_led_layout {
 };
 #define GP_LED_NONE         0xff
 
-/* Input modes (gp_settings.mode; Home + Y / Home + X / Home + B): what the
- * pad is to a host. Steam: SInput over Bluetooth and USB. Xbox: an Xbox One
- * S pad over Bluetooth, an Xbox 360 pad over USB, as stock. DS4: a
- * DualShock 4 over both (gp_ds4.h; for PCs, not a PS4 console). */
-enum gp_mode { GP_MODE_STEAM, GP_MODE_XBOX, GP_MODE_DS4 };
-#define GP_MODE_LAST        GP_MODE_DS4
+/* Input modes (gp_settings.mode; Home + A / X / B / Y, as stock's combos): what the pad is
+ * to a host. Steam: SInput over Bluetooth and USB. Xbox: an Xbox One S pad
+ * over Bluetooth, an Xbox 360 pad over USB, as stock. DS4: a DualShock 4
+ * over both (gp_ds4.h; for PCs, not a PS4 console). Switch: a Switch Pro
+ * Controller over both (gp_switch.h; the console and PCs). */
+enum gp_mode { GP_MODE_STEAM, GP_MODE_XBOX, GP_MODE_DS4, GP_MODE_SWITCH };
+#define GP_MODE_LAST        GP_MODE_SWITCH
 /* How the pad reaches the computer without a cable: Bluetooth to the host
  * itself, or the C2 receiver (its own Bluetooth identity and pairings,
  * gp_bt.c). Independent of the mode. */

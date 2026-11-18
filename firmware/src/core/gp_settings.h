@@ -37,7 +37,7 @@ struct gp_profile {
 
 struct gp_settings {
     u8 rumble_level;                    /* 0 (off) .. 4 */
-    u8 mode;                            /* enum gp_mode: Steam (SInput), Xbox or DS4 */
+    u8 mode;                            /* enum gp_mode: Steam (SInput), Xbox, DS4 or Switch */
     u8 idle_off_min;                    /* connected and idle: off after this many minutes, 0 = never */
     u8 profile;                         /* the active profile, 0 .. GP_PROFILES - 1 */
     struct gp_profile prof[GP_PROFILES];

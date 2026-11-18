@@ -32,10 +32,14 @@ import time
 # gamepad + log, the Xbox modes: the pad wired 3537:1053, the receiver
 # 3537:100B (both shown as "Xbox 360 Controller for Windows"), and DS4 mode:
 # 054C:09CC "Wireless Controller" on both, told apart by the receiver's
-# vendor collection (output report 0x0F) in its HID report descriptor.
-IDS = {('3537', '01ab'), ('3537', '0575'), ('2e8a', '10c6'), ('3537', '1053'), ('3537', '100b'), ('054c', '09cc')}
+# vendor collection (output report 0x0F) in its HID report descriptor;
+# Switch mode: 057E:2009 "Pro Controller" on both, the receiver's with
+# bcdDevice 0x0210 (the pad's 0x0200, a real one's).
+IDS = {('3537', '01ab'), ('3537', '0575'), ('2e8a', '10c6'), ('3537', '1053'), ('3537', '100b'), ('054c', '09cc'),
+       ('057e', '2009')}
 RECEIVER_IDS = {('3537', '100b'), ('3537', '0575')}
 DS4_IDS = {('054c', '09cc')}
+SWITCH_IDS = {('057e', '2009')}
 OUT_REPORT_0F = bytes.fromhex('850f0922953f9102')  # the vendor collection's output report 0x0F
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -61,6 +65,12 @@ def has_vendor_report(usb_dev):
 def kind(product, vid_pid=None, usb_dev=None):
     if vid_pid in DS4_IDS:
         return 'receiver' if usb_dev and has_vendor_report(usb_dev) else 'pad'
+    if vid_pid in SWITCH_IDS:
+        try:
+            bcd = open(os.path.join(usb_dev, 'bcdDevice')).read().strip() if usb_dev else ''
+        except OSError:
+            bcd = ''
+        return 'receiver' if bcd == '0210' else 'pad'
     return 'receiver' if vid_pid in RECEIVER_IDS or 'receiver' in product.lower() else 'pad'
 
 

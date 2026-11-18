@@ -20,7 +20,7 @@ over the USB log port (the pad's cable or the receiver) in any mode.
 Talks to the pad's hidraw node (2E8A:10C6): requests go out as SInput
 output report 0x03 with command 0xC0, replies come back in input report
 0x02 with the same first byte. Works while SDL or Steam has the pad open.
-Without one (Xbox or DS4 mode), or with --serial, it uses the debug log port
+Without one (Xbox, DS4 or Switch mode), or with --serial, it uses the debug log port
 instead: "cfg <hex>" out, "cfg> <hex>" back. Only one program can read
 that port: stop tools/c2log.py first.
 """
@@ -46,7 +46,7 @@ AXES = ['LX', 'LY', 'RX', 'RY']
 STATUS = {0: 'ok', 1: 'unknown operation', 2: 'unknown setting', 3: 'value out of range',
           4: 'not possible now', 5: 'request too short',
           6: 'done, but NOT saved (the store write failed): in use until power-off only'}
-MODES = {0: 'Steam (SInput)', 1: 'Xbox', 2: 'DS4 (DualShock 4)'}
+MODES = {0: 'Steam (SInput)', 1: 'Xbox', 2: 'DS4 (DualShock 4)', 3: 'Switch (Pro Controller)'}
 PLUG = {2: 'charging', 3: 'full', 4: 'on battery'}
 F_RESTART, F_PROFILE = 0x01, 0x02
 BUTTONS = ['a', 'b', 'x', 'y', 'up', 'down', 'left', 'right', 'l3', 'r3', 'lb', 'rb',

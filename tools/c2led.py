@@ -142,7 +142,7 @@ def main():
 
     dev = a.device or find_hidraw()
     if not dev:
-        sys.exit('C2 not found: is it on, connected, in Steam mode (Home + Y held 3 s)?')
+        sys.exit('C2 not found: is it on, connected, in Steam mode (Home + A held 3 s)?')
 
     try:
         if per_slot:

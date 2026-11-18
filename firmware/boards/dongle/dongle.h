@@ -52,6 +52,10 @@ void dg_usb_set_mode(int mode);             /* enum gp_mode: a pad spoke (hello 
 void dg_usb_pad_gone(void);                 /* the pad disconnected: no gamepad on USB (re-enumerates) */
 int  dg_usb_xinput(void);                   /* up as XInput (Xbox mode) */
 int  dg_usb_ds4(void);                      /* up as the DualShock 4 (DS4 mode) */
+int  dg_usb_switch(void);                   /* up as the Pro Controller (Switch mode) */
+struct gp_state;
+struct gp_battery;
+void dg_usb_switch_state(const struct gp_state *s, const struct gp_battery *b, u32 now_ms);   /* BT task */
 int  dg_usb_sinput_up(void);                /* up as the SInput gamepad (Steam mode) */
 void dg_usb_poll(void);                     /* app task, every 100 ms */
 

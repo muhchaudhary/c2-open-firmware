@@ -16,6 +16,9 @@
  *    IN and OUT on endpoint 2, 32 bytes each, under stock's IDs (below).
  *  - DS4: a HID interface as SInput's, with the DualShock 4's report
  *    descriptor; its feature reports answer GET_REPORT (gp_ds4.h).
+ *  - Switch: the same with the Pro Controller's report descriptor and a
+ *    64-byte interrupt OUT endpoint, where its host's 0x80 handshake,
+ *    subcommands and rumble come (gp_switch.h).
  *
  * The device descriptor and strings come from here too (patch_sdk.py
  * renames the SDK's fixed ones), so the IDs follow the mode: SInput's (SDL
@@ -34,6 +37,7 @@
 #include "gp_sinput.h"
 #include "gp_xinput.h"
 #include "gp_ds4.h"
+#include "gp_switch.h"
 #include "gp_settings.h"
 #include "gp_log.h"
 
@@ -75,6 +79,8 @@ static u8 *gp_ep_in_dma, *gp_ep_out_dma;
 #define HID_ITF_DESC_LEN_AT (USB_DT_INTERFACE_SIZE + 7)
 #define DS4_EP_OUT          HID_EP_OUT      /* 0x02, as XInput's */
 #define DS4_OUT_MAXP        32              /* the output report, 0x05 + 31 */
+#define SW_OUT_MAXP         64              /* a Pro Controller's (the pool has room: patch_sdk.py) */
+#define HID_ITF_OUT_MAXP_AT (sizeof(gp_hid_itf_desc) - 3)
 static u8 gp_hid_itf_desc[] = {
     USB_DT_INTERFACE_SIZE, USB_DT_INTERFACE,
     0x00,                                   /* bInterfaceNumber: set in hid_desc_config */
@@ -93,7 +99,7 @@ static u8 gp_hid_itf_desc[] = {
     USB_DIR_IN | HID_EP_IN, USB_ENDPOINT_XFER_INT,
     LOBYTE(GP_USB_MAXP), HIBYTE(GP_USB_MAXP),
     0x01,                                   /* bInterval: 1 ms */
-    /* interrupt OUT: DS4 only */
+    /* interrupt OUT: DS4 and Switch only (maxp set in hid_desc_config) */
     USB_DT_ENDPOINT_SIZE, USB_DT_ENDPOINT,
     DS4_EP_OUT, USB_ENDPOINT_XFER_INT,
     LOBYTE(DS4_OUT_MAXP), HIBYTE(DS4_OUT_MAXP),
@@ -115,6 +121,13 @@ static void gp_ds4_rx(struct usb_device_t *usb_device, u32 ep)
     ds4_output(buf, len);
 }
 
+static void gp_sw_rx(struct usb_device_t *usb_device, u32 ep)
+{
+    u8 buf[SW_OUT_MAXP];
+    u32 len = usb_g_intr_read(usb_device2id(usb_device), DS4_EP_OUT, buf, sizeof(buf), 0);
+    sw_output(&sw_usb_ctx, buf, len);
+}
+
 static void gp_ep_init(struct usb_device_t *usb_device)
 {
     const usb_dev id = usb_device2id(usb_device);
@@ -128,6 +141,9 @@ static void gp_ep_init(struct usb_device_t *usb_device)
         if (gp_usb_proto == GP_PROTO_DS4) {
             usb_g_ep_config(id, DS4_EP_OUT | USB_DIR_OUT, USB_ENDPOINT_XFER_INT, 1, gp_ep_out_dma, DS4_OUT_MAXP);
             usb_g_set_intr_hander(id, DS4_EP_OUT | USB_DIR_OUT, gp_ds4_rx);
+        } else if (gp_usb_proto == GP_PROTO_SWITCH) {
+            usb_g_ep_config(id, DS4_EP_OUT | USB_DIR_OUT, USB_ENDPOINT_XFER_INT, 1, gp_ep_out_dma, SW_OUT_MAXP);
+            usb_g_set_intr_hander(id, DS4_EP_OUT | USB_DIR_OUT, gp_sw_rx);
         }
         usb_enable_ep(id, HID_EP_IN);
     }
@@ -139,7 +155,7 @@ static void gp_itf_reset(struct usb_device_t *usb_device, u32 itf)
     gp_ep_init(usb_device);
 }
 
-/* SET_REPORT data stage (SInput, DS4): an output report, ID first. */
+/* SET_REPORT data stage (SInput, DS4, Switch): an output report, ID first. */
 static u32 gp_hid_set_report(struct usb_device_t *usb_device, struct usb_ctrlrequest *setup)
 {
     u8 buf[GP_USB_MAXP];
@@ -147,6 +163,8 @@ static u32 gp_hid_set_report(struct usb_device_t *usb_device, struct usb_ctrlreq
     usb_read_ep0(usb_device2id(usb_device), buf, len);
     if (gp_usb_proto == GP_PROTO_DS4) {
         ds4_output(buf, len);                            /* 0x05: rumble, lightbar */
+    } else if (gp_usb_proto == GP_PROTO_SWITCH) {
+        sw_output(&sw_usb_ctx, buf, len);                /* hidraw without the OUT endpoint */
     } else if (len >= 2 && buf[0] == SINPUT_ID_COMMAND) {
         sinput_command(buf + 1, len - 1);
     }
@@ -180,8 +198,8 @@ static u32 gp_itf_handler(struct usb_device_t *usb_device, struct usb_ctrlreques
         return 0;
     }
     u8 *tx = usb_get_setup_buffer(usb_device);
-    int hid = gp_usb_proto == GP_PROTO_SINPUT || gp_usb_proto == GP_PROTO_DS4;
-    int ds4 = gp_usb_proto == GP_PROTO_DS4;
+    int hid = gp_usb_proto == GP_PROTO_SINPUT || gp_usb_proto == GP_PROTO_DS4 || gp_usb_proto == GP_PROTO_SWITCH;
+    int ds4 = gp_usb_proto == GP_PROTO_DS4, sw = gp_usb_proto == GP_PROTO_SWITCH;
     switch (req->bRequestType & USB_TYPE_MASK) {
     case USB_TYPE_STANDARD:
         switch (req->bRequest) {
@@ -192,11 +210,13 @@ static u32 gp_itf_handler(struct usb_device_t *usb_device, struct usb_ctrlreques
                 gp_ep_init(usb_device);
                 if (ds4) {
                     usb_set_data_payload(usb_device, req, ds4_usb_report_desc, ds4_usb_report_desc_len);
+                } else if (sw) {
+                    usb_set_data_payload(usb_device, req, sw_usb_report_desc, sw_usb_report_desc_len);
                 } else {
                     usb_set_data_payload(usb_device, req, sinput_report_desc, SINPUT_REPORT_DESC_LEN);
                 }
                 if (!gp_usb_ready) {
-                    gp_usb_ready = 1;                    /* SInput, DS4: a HID driver took the pad */
+                    gp_usb_ready = 1;                    /* SInput, DS4, Switch: a HID driver took the pad */
                     gp_log("usb: host opened the gamepad");
                 }
             } else {
@@ -265,6 +285,8 @@ u32 hid_register(const usb_dev usb_id)
         gp_ep_in_dma = usb_alloc_ep_dmabuffer(usb_id, HID_EP_IN | USB_DIR_IN, GP_USB_MAXP);
         if (gp_usb_proto == GP_PROTO_DS4) {
             gp_ep_out_dma = usb_alloc_ep_dmabuffer(usb_id, DS4_EP_OUT, DS4_OUT_MAXP);   /* patch_sdk.py: pool room */
+        } else if (gp_usb_proto == GP_PROTO_SWITCH) {
+            gp_ep_out_dma = usb_alloc_ep_dmabuffer(usb_id, DS4_EP_OUT, SW_OUT_MAXP);    /* 64: the room patch_sdk.py made */
         }
     }
     return 0;
@@ -277,14 +299,18 @@ void hid_release(const usb_dev usb_id)
 
 u32 hid_desc_config(const usb_dev usb_id, u8 *ptr, u32 *cur_itf_num)
 {
-    int ds4 = gp_usb_proto == GP_PROTO_DS4;
-    u16 rlen = ds4 ? ds4_usb_report_desc_len : SINPUT_REPORT_DESC_LEN;
-    gp_hid_itf_desc[HID_ITF_NUM_EP_AT] = ds4 ? 2 : 1;
+    int ds4 = gp_usb_proto == GP_PROTO_DS4, sw = gp_usb_proto == GP_PROTO_SWITCH;
+    int out = ds4 || sw;
+    u16 rlen = ds4 ? ds4_usb_report_desc_len : sw ? sw_usb_report_desc_len : SINPUT_REPORT_DESC_LEN;
+    u16 out_maxp = sw ? SW_OUT_MAXP : DS4_OUT_MAXP;
+    gp_hid_itf_desc[HID_ITF_NUM_EP_AT] = out ? 2 : 1;
+    gp_hid_itf_desc[HID_ITF_OUT_MAXP_AT] = LOBYTE(out_maxp);
+    gp_hid_itf_desc[HID_ITF_OUT_MAXP_AT + 1] = HIBYTE(out_maxp);
     gp_hid_itf_desc[HID_ITF_DESC_LEN_AT] = LOBYTE(rlen);
     gp_hid_itf_desc[HID_ITF_DESC_LEN_AT + 1] = HIBYTE(rlen);
     const u8 *d = gp_usb_proto == GP_PROTO_XINPUT ? xinput_itf_desc : gp_hid_itf_desc;
     u32 n = gp_usb_proto == GP_PROTO_XINPUT ? XINPUT_ITF_DESC_LEN :
-            sizeof(gp_hid_itf_desc) - (ds4 ? 0 : USB_DT_ENDPOINT_SIZE);
+            sizeof(gp_hid_itf_desc) - (out ? 0 : USB_DT_ENDPOINT_SIZE);
     memcpy(ptr, d, n);
     ptr[2] = *cur_itf_num;
     if (usb_set_interface_hander(usb_id, *cur_itf_num, gp_itf_handler) != *cur_itf_num ||
@@ -299,16 +325,16 @@ u32 hid_desc_config(const usb_dev usb_id, u8 *ptr, u32 *cur_itf_num)
 void get_device_descriptor(u8 *ptr)
 {
     int gamepad = gp_usb_mode == USB_GAMEPAD, xinput = gamepad && gp_usb_proto == GP_PROTO_XINPUT;
-    int ds4 = gamepad && gp_usb_proto == GP_PROTO_DS4;
-    u16 vid = xinput ? XINPUT_VID : ds4 ? DS4_VID : gamepad ? GP_PNP_VID : GP_USB_LOG_VID;
-    u16 pid = xinput ? XINPUT_PID : ds4 ? DS4_PID : gamepad ? GP_PNP_PID : GP_USB_LOG_PID;
+    int ds4 = gamepad && gp_usb_proto == GP_PROTO_DS4, sw = gamepad && gp_usb_proto == GP_PROTO_SWITCH;
+    u16 vid = xinput ? XINPUT_VID : ds4 ? DS4_VID : sw ? SW_VID : gamepad ? GP_PNP_VID : GP_USB_LOG_VID;
+    u16 pid = xinput ? XINPUT_PID : ds4 ? DS4_PID : sw ? SW_PID : gamepad ? GP_PNP_PID : GP_USB_LOG_PID;
     /* Gamepad + log: composite with interface association (the CDC log has
      * one), class EF / 02 / 01, so Windows binds each function on its own
      * (XInput's through the OS descriptors). */
     u8 cls = gamepad ? 0xef : 0x00;
     u8 sub = gamepad ? 0x02 : 0x00;
     u8 pro = gamepad ? 0x01 : 0x00;
-    u16 bcd = xinput ? XINPUT_BCD : ds4 ? DS4_VERSION : GP_PNP_VERSION;
+    u16 bcd = xinput ? XINPUT_BCD : ds4 ? DS4_VERSION : sw ? SW_VERSION : GP_PNP_VERSION;
     const u8 d[USB_DT_DEVICE_SIZE] = {
         USB_DT_DEVICE_SIZE, USB_DT_DEVICE,
         /* USB 2.0 (a full-speed device may say so), as every stock
@@ -345,7 +371,8 @@ static void gp_usb_string(u8 *ptr, const char *a, const char *b)
 void get_manufacture_str(u8 *ptr)
 {
     int ds4 = gp_usb_mode == USB_GAMEPAD && gp_usb_proto == GP_PROTO_DS4;
-    gp_usb_string(ptr, ds4 ? DS4_VENDOR_NAME : GP_VENDOR_NAME, NULL);   /* DS4: named as a real one */
+    int sw = gp_usb_mode == USB_GAMEPAD && gp_usb_proto == GP_PROTO_SWITCH;
+    gp_usb_string(ptr, ds4 ? DS4_VENDOR_NAME : sw ? SW_VENDOR_NAME : GP_VENDOR_NAME, NULL);   /* DS4, Switch: as a real one */
 }
 
 void get_product_str(u8 *ptr)
@@ -354,6 +381,8 @@ void get_product_str(u8 *ptr)
         gp_usb_string(ptr, XINPUT_NAME, NULL);
     } else if (gp_usb_mode == USB_GAMEPAD && gp_usb_proto == GP_PROTO_DS4) {
         gp_usb_string(ptr, DS4_NAME, NULL);
+    } else if (gp_usb_mode == USB_GAMEPAD && gp_usb_proto == GP_PROTO_SWITCH) {
+        gp_usb_string(ptr, SW_NAME, NULL);
     } else {
         gp_usb_string(ptr, GP_PRODUCT_NAME, gp_usb_mode != USB_GAMEPAD ? " debug log" : NULL);
     }
@@ -433,7 +462,7 @@ int gp_usb_host_ready(void)
 /* ---- Bringing the device up and down (app task) -------------------------- */
 static const char *gp_proto_name(int p)
 {
-    return p == GP_PROTO_XINPUT ? "XInput" : p == GP_PROTO_DS4 ? "DS4" : "SInput";
+    return p == GP_PROTO_XINPUT ? "XInput" : p == GP_PROTO_DS4 ? "DS4" : p == GP_PROTO_SWITCH ? "Switch" : "SInput";
 }
 
 static void gp_usb_up(int id)
@@ -441,7 +470,8 @@ static void gp_usb_up(int id)
     gp_usb_ready = 0;
     gp_usb_mode = (gp_usb_log_wanted || !gp_usb_input) ? USB_LOG_ONLY : USB_GAMEPAD;
     gp_usb_proto = gp_settings.mode == GP_MODE_XBOX ? GP_PROTO_XINPUT :
-                   gp_settings.mode == GP_MODE_DS4 ? GP_PROTO_DS4 : GP_PROTO_SINPUT;
+                   gp_settings.mode == GP_MODE_DS4 ? GP_PROTO_DS4 :
+                   gp_settings.mode == GP_MODE_SWITCH ? GP_PROTO_SWITCH : GP_PROTO_SINPUT;
     if (gp_usb_mode == USB_GAMEPAD) {
         gp_log("usb: host on the cable, up as %s gamepad + log", gp_proto_name(gp_usb_proto));
     } else {

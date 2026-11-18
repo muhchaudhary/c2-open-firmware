@@ -11,6 +11,7 @@
 #include "gp_xinput.h"
 #include "gp_xboxbt.h"
 #include "gp_ds4.h"
+#include "gp_switch.h"
 #include "gp_link.h"
 #include "gp_leds.h"
 #include "gp_rumble.h"
@@ -219,6 +220,8 @@ static const struct gp_transport *gp_transport(void)
 
 static void gp_tick_xboxbt(const struct gp_transport *tr, u32 buttons);
 static void gp_tick_ds4(const struct gp_transport *tr, u32 buttons, int bt);
+static void gp_tick_switch(const struct gp_transport *tr, u32 buttons, int bt);
+static void gp_switch_idle(void);
 static volatile u8 gp_link_hello_due = 1, gp_link_status_due = 1;   /* receiver link (gp_tick_link) */
 static void gp_tick_link(const struct gp_transport *tr, u32 buttons, u32 now_ms);
 
@@ -226,6 +229,7 @@ static void gp_tick_body(void)
 {
     static const struct gp_transport *last_tr;
     const struct gp_transport *gp_tr = gp_transport();
+    gp_switch_idle();
     if (gp_tr != last_tr) {
         gp_conn_ticks = 0;                               /* a new host: unasked features replies again */
         gp_conn_t0 = gp_ms();
@@ -287,6 +291,10 @@ static void gp_tick_body(void)
     }
     if (gp_tr->protocol() == GP_PROTO_DS4 || gp_tr->protocol() == GP_PROTO_DS4BT) {
         gp_tick_ds4(gp_tr, buttons, gp_tr->protocol() == GP_PROTO_DS4BT);
+        return;
+    }
+    if (gp_tr->protocol() == GP_PROTO_SWITCH || gp_tr->protocol() == GP_PROTO_SWITCHBT) {
+        gp_tick_switch(gp_tr, buttons, gp_tr->protocol() == GP_PROTO_SWITCHBT);
         return;
     }
     u8 rep[SINPUT_REPORT_LEN];
@@ -364,6 +372,52 @@ static void gp_tick_ds4(const struct gp_transport *tr, u32 buttons, int bt)
     } else {
         ds4_encode_usb(rep, &s, &b, gp_ts_us, counter++);
         tr->post(DS4_ID_USB_STATE, rep, DS4_USB_REPORT_LEN);
+    }
+}
+
+/* Switch (gp_switch.h): every tick the state is read (the IMU history
+ * keeps the last three ticks' samples); the protocol says what goes out:
+ * a subcommand's reply as soon as there is one, else the state at the
+ * Pro Controller's rate (15 ms Bluetooth, 8 ms USB). */
+static void gp_tick_switch(const struct gp_transport *tr, u32 buttons, int bt)
+{
+    struct gp_state s;
+    struct gp_battery b;
+    u8 rep[SW_REPORT_MAX], id;
+    gp_board_battery(&b);                                /* every tick: the average and the "full" hold */
+    gp_read_state(&s, buttons);
+    int n = sw_next_report(bt ? &sw_bt_ctx : &sw_usb_ctx, &s, &b, gp_ms(), &id, rep);
+    if (n) {
+        tr->post(id, rep, n);
+    }
+}
+
+/* Each transport's Switch protocol starts fresh for each host: reset
+ * while no host is there (no output can come then, so the reset never
+ * races the host's first command; a reset at the connect could lose the
+ * USB host's 80 01, sent right after the report descriptor). */
+static void gp_switch_idle(void)
+{
+    static u8 bt_fresh, usb_fresh;
+    if (gp_settings.mode != GP_MODE_SWITCH) {
+        return;
+    }
+    u8 msb[6];
+    const u8 *mac = bt_get_mac_addr();
+    for (int k = 0; k < 6; k++) {
+        msb[k] = mac[5 - k];
+    }
+    if (gp_bt_transport.connected()) {
+        bt_fresh = 0;
+    } else if (!bt_fresh) {
+        sw_reset(&sw_bt_ctx, 0, msb);
+        bt_fresh = 1;
+    }
+    if (gp_usb_transport.connected()) {
+        usb_fresh = 0;
+    } else if (!usb_fresh) {
+        sw_reset(&sw_usb_ctx, 1, msb);
+        usb_fresh = 1;
     }
 }
 
@@ -475,8 +529,9 @@ static void gp_log_status(const char *tr, u8 connected)
     sfail = gp_hid_send_errs;
 }
 
-/* Combos held MODE_HOLD_MS: Home + X = Xbox, Home + Y = Steam, Home + B =
- * DS4 (the input mode), Home + M = the link (Bluetooth <-> the C2 receiver, saved, then a
+/* Combos held MODE_HOLD_MS, as stock's manual has them (docs/stock-features.md):
+ * Home + X = Xbox (stock's XInput), Home + Y = Switch (stock's NS), Home + A =
+ * Steam (stock's HID / Android slot), Home + B = DS4 (the input mode), Home + M = the link (Bluetooth <-> the C2 receiver, saved, then a
  * restart onto the other identity). A mode is saved; the pad then restarts
  * in the new mode (the Bluetooth
  * identity is set when the stack starts). On the receiver link the pad's
@@ -492,18 +547,26 @@ static void gp_mode_restart(void *priv)
     cpu_reset();
 }
 
-/* Home's colour follows the mode: Steam white, Xbox green, DS4 blue. */
+/* Home's colour follows the mode, stock's where stock has the mode: Steam
+ * yellow (stock's HID / Android), Xbox green, DS4 blue, Switch red. On red the low-battery warning (a red flash) wouldn't show:
+ * there Home goes dark for the flash instead. */
 static void gp_core_mode_colour(void)
 {
-    static const u8 white[3] = { 16, 16, 16 };
+    static const u8 yellow[3] = { 16, 9, 0 };          /* stock's HID / Android mode */
     static const u8 green[3] = { 2, 16, 2 };            /* Xbox green, #107C10 at the LEDs' usual level */
     static const u8 blue[3] = { 0, 5, 16 };             /* PlayStation blue, #0070D1 */
-    gp_leds_set_mode_colour(gp_settings.mode == GP_MODE_XBOX ? green : gp_settings.mode == GP_MODE_DS4 ? blue : white);
+    static const u8 red[3] = { 16, 0, 1 };              /* Nintendo red, #E60012 */
+    static const u8 dark[3] = { 0, 0, 0 };
+    int m = gp_settings.mode;
+    gp_leds_set_mode_colour(m == GP_MODE_XBOX ? green : m == GP_MODE_DS4 ? blue : m == GP_MODE_SWITCH ? red : yellow);
+    if (m == GP_MODE_SWITCH) {
+        gp_leds_set_lowbat_rgb(dark);
+    }
 }
 
 static const char *gp_mode_name(int mode)
 {
-    return mode == GP_MODE_XBOX ? "Xbox" : mode == GP_MODE_DS4 ? "DS4" : "Steam";
+    return mode == GP_MODE_XBOX ? "Xbox" : mode == GP_MODE_DS4 ? "DS4" : mode == GP_MODE_SWITCH ? "Switch" : "Steam";
 }
 
 void gp_core_restart(const char *why)
@@ -537,9 +600,11 @@ static void gp_mode_combo(void)
         if (b & GP_BIT(GP_BTN_WEST)) {
             want = GP_MODE_XBOX;
         } else if (b & GP_BIT(GP_BTN_NORTH)) {
-            want = GP_MODE_STEAM;
+            want = GP_MODE_SWITCH;
         } else if (b & GP_BIT(GP_BTN_EAST)) {
             want = GP_MODE_DS4;
+        } else if (b & GP_BIT(GP_BTN_SOUTH)) {
+            want = GP_MODE_STEAM;
         } else if (b & GP_BIT(GP_BTN_MODIFIER)) {
             want = COMBO_LINK;
         }
@@ -573,7 +638,8 @@ static void gp_mode_combo(void)
         return;
     }
     switching = 1;
-    gp_core_restart(want == GP_MODE_XBOX ? "mode Xbox" : want == GP_MODE_DS4 ? "mode DS4" : "mode Steam");
+    gp_core_restart(want == GP_MODE_XBOX ? "mode Xbox" : want == GP_MODE_DS4 ? "mode DS4" :
+                    want == GP_MODE_SWITCH ? "mode Switch" : "mode Steam");
 }
 
 /* Home + Capture: tapped (released within PAIR_HOLD_MS) with a USB host on
@@ -584,7 +650,9 @@ static void gp_mode_combo(void)
 #define PAIR_HOLD_MS        3000
 #define TAP_MIN_MS          100
 
-/* DS4 mode: USB input waits for Bluetooth to be down. hid-playstation
+/* DS4 and Switch mode: USB input waits for Bluetooth to be down (Switch:
+ * the same address on both, as DS4's; a real Pro Controller hands over
+ * the same way). hid-playstation
  * reads the USB pad's address (feature 0x12, the Bluetooth one) at the
  * probe and refuses a second device with an address it has ("Duplicate
  * device found for MAC address", -EEXIST; 2026-11-17): the pad still on
@@ -630,8 +698,9 @@ static void gp_home_capture(void)
         return;
     }
     if (held_ms >= TAP_MIN_MS && held_ms < PAIR_HOLD_MS && gp_usb_host_present() && !usb_wait_ms) {
-        if (!gp_usb_input_on() && gp_settings.mode == GP_MODE_DS4 && gp_bt_link_up()) {
-            gp_log("usb: Bluetooth down first (DS4: one address)");
+        if (!gp_usb_input_on() && (gp_settings.mode == GP_MODE_DS4 || gp_settings.mode == GP_MODE_SWITCH) &&
+            gp_bt_link_up()) {
+            gp_log("usb: Bluetooth down first (DS4, Switch: one address)");
             gp_bt_suspend(1);
             usb_wait_ms = GP_POLL_MS;
             usb_down_ms = 0;

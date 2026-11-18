@@ -14,6 +14,7 @@
 #include "gp_config.h"
 #include "gp_xboxbt.h"
 #include "gp_ds4.h"
+#include "gp_switch.h"
 #include "gp_link.h"
 #include "gp_core.h"
 #include "gp_settings.h"
@@ -65,6 +66,13 @@ extern void *bt_vm_interface(void);                                             
  * DS4's Device ID and name. */
 #define DS4_BOND_VM         190
 
+/* Switch mode (gp_switch.h): a Pro Controller, as stock's "bt switch mode"
+ * is a device of its own: another address (bit 3 flipped), its own bonds
+ * (VM ids SWITCH_BOND_VM..+20, after DS4 mode's; the last free 21 below
+ * VM_ITEM_MAX_NUM 256), the name "Pro Controller" and 057E:2009. The class
+ * of device is already a gamepad's, 0x002508, as a real one. */
+#define SWITCH_BOND_VM      220
+
 int gp_bt_receiver(void)
 {
     return gp_settings.link == GP_LINK_RECEIVER;
@@ -78,6 +86,11 @@ static int gp_bt_xbox(void)
 static int gp_bt_ds4(void)
 {
     return !gp_bt_receiver() && gp_settings.mode == GP_MODE_DS4;
+}
+
+static int gp_bt_switch(void)
+{
+    return !gp_bt_receiver() && gp_settings.mode == GP_MODE_SWITCH;
 }
 
 /* The BT library's interrupt-channel send buffer defaults to 64 bytes
@@ -158,6 +171,10 @@ static void gp_bt_hid_output(u8 *packet, u16 size, u16 channel)
         ds4_output(p, size);                             /* 0x11: rumble, lightbar */
         return;
     }
+    if (gp_bt_switch()) {
+        sw_output(&sw_bt_ctx, p, size);                  /* 0x01 rumble + subcommand, 0x10 rumble */
+        return;
+    }
     if (size < 2 || p[0] != SINPUT_ID_COMMAND) {
         return;
     }
@@ -226,11 +243,20 @@ void gp_bt_init(void)
         gp_sdp_set_identity(DS4_VID, DS4_PID, DS4_VERSION, DS4_NAME);
         gp_edr_config.report_map = ds4_bt_report_desc;
         gp_edr_config.report_map_size = ds4_bt_report_desc_len;
+    } else if (gp_bt_switch()) {
+        u8 mac[6];
+        memcpy(mac, bt_get_mac_addr(), 6);
+        mac[0] ^= 0x08;                                  /* a device of its own to the host */
+        bt_set_mac_addr(mac);
+        name = SW_NAME;
+        gp_sdp_set_identity(SW_VID, SW_PID, SW_VERSION, SW_NAME);
+        gp_edr_config.report_map = sw_bt_report_desc;
+        gp_edr_config.report_map_size = sw_bt_report_desc_len;
     } else {
         gp_sdp_set_identity(GP_PNP_VID, GP_PNP_PID, GP_PNP_VERSION, GP_PRODUCT_NAME);
     }
     gp_log("bt: %s as \"%s\"", gp_bt_receiver() ? "receiver link" : gp_bt_xbox() ? "Xbox mode" :
-           gp_bt_ds4() ? "DS4 mode" : "Steam mode", name);
+           gp_bt_ds4() ? "DS4 mode" : gp_bt_switch() ? "Switch mode" : "Steam mode", name);
     btstack_edr_start_before_init(&gp_edr_config, 0);
     user_hid_init(gp_bt_hid_output);
     bt_set_local_name((char *)name, strlen(name));
@@ -245,6 +271,8 @@ void gp_bt_after_init(void)
         set_bt_vm_interface(XBOX_BOND_VM, bt_vm_interface());   /* Xbox mode's own bonds */
     } else if (gp_bt_ds4()) {
         set_bt_vm_interface(DS4_BOND_VM, bt_vm_interface());    /* DS4 mode's own bonds */
+    } else if (gp_bt_switch()) {
+        set_bt_vm_interface(SWITCH_BOND_VM, bt_vm_interface()); /* Switch mode's own bonds */
     }
     btstack_edr_start_after_init(0);
     if (!bt_connect_phone_back_start()) {
@@ -298,7 +326,7 @@ static int gp_bt_busy(void)
 static int gp_bt_protocol(void)
 {
     return gp_bt_receiver() ? GP_PROTO_LINK : gp_bt_xbox() ? GP_PROTO_XBOXBT :
-           gp_bt_ds4() ? GP_PROTO_DS4BT : GP_PROTO_SINPUT;
+           gp_bt_ds4() ? GP_PROTO_DS4BT : gp_bt_switch() ? GP_PROTO_SWITCHBT : GP_PROTO_SINPUT;
 }
 
 static void gp_bt_post(u8 id, const u8 *report, int len)
@@ -319,6 +347,15 @@ static void gp_bt_post(u8 id, const u8 *report, int len)
     /* SInput's battery report (sent only on a change) isn't replaced by a
      * state report either. Xbox mode's battery is ID 4 too: the same holds. */
     keep |= gp_out_id == SINPUT_ID_BATTERY && id == SINPUT_ID_STATE;
+    /* Switch: a subcommand's reply waiting isn't replaced by anything (the
+     * host waits for it); a newer reply that finds it there goes again on
+     * the next tick (gp_switch.h: sw_reply_unsent). */
+    if (gp_bt_switch()) {
+        keep = gp_out_id == SW_ID_REPLY;
+        if (keep && id == SW_ID_REPLY) {
+            sw_reply_unsent(&sw_bt_ctx);
+        }
+    }
     if (!keep) {
         memcpy(gp_out, report, MIN(len, sizeof(gp_out)));
         gp_out_len = MIN(len, sizeof(gp_out));
@@ -447,6 +484,10 @@ static void gp_bt_send_posted(void)
                 } else if (id == SINPUT_ID_FEATURES && buf[0] != GP_CFG_CMD && sinput_feat_asked) {
                     sinput_feat_asked = 0;
                     gp_log("hid: features reply sent (asked)");
+                }
+            } else if (gp_bt_switch()) {
+                if (id == SW_ID_REPLY) {
+                    sw_reply_unsent(&sw_bt_ctx);         /* pool full: again on the next tick */
                 }
             } else if (id == GP_LINK_ID_HELLO || id == GP_LINK_ID_STATUS) {
                 gp_core_link_unsent(id);                 /* pool full: again on the next tick */

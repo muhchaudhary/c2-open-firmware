@@ -43,16 +43,17 @@ of CPU and starved the idle task, which alone clears the watchdog).
 **Protocols**: SInput in Steam mode (`docs/sinput.md`), Xbox in Xbox mode:
 an Xbox One S pad over Bluetooth (`core/gp_xboxbt.c`), a wired Xbox 360 pad
 over USB (`core/gp_xinput*.c`); a DualShock 4 over both in DS4 mode
-(`docs/ds4.md`, `core/gp_ds4*.c`). The configuration protocol rides on SInput
-or the log port (`docs/config-protocol.md`).
+(`docs/ds4.md`, `core/gp_ds4*.c`); a Switch Pro Controller over both in
+Switch mode (`docs/switch.md`, `core/gp_switch*.c`). The configuration
+protocol rides on SInput or the log port (`docs/config-protocol.md`).
 
-**Modes, links and identities.** The input mode (Steam / Xbox / DS4) and
+**Modes, links and identities.** The input mode (Steam / Xbox / DS4 / Switch) and
 the link (Bluetooth / receiver) are saved settings. Each combination is its
 own Bluetooth device to a host, as stock: Xbox mode flips bit 0 of the
 address and keeps its bonds at VM ids 130..150, the receiver link flips bit
 1 and keeps them at 160..180 with the name "C2 pad (receiver link)", DS4
-mode flips bit 2 and keeps them at 190..210, so every host keeps its
-pairing. The identity (Device ID, HID record) is set at
+mode flips bit 2 and keeps them at 190..210, Switch mode flips bit 3 and
+keeps them at 220..240, so every host keeps its pairing. The identity (Device ID, HID record) is set at
 start-up: `patch_sdk.py` makes the SDK's records writable, and the SDP
 record buffer grew to 768 B (the Xbox descriptor, 334 B, overflowed 512 B
 into a boot loop).
@@ -119,8 +120,9 @@ change for a new setting.
   rumble at the new level). Xbox Bluetooth commands carry a duration.
 - **LEDs** (`drivers/ws2812_spi.c`, `core/gp_leds.c`): the chain in
   `docs/sinput.md` §1. Home: the host's colour when connected; breathing
-  (reconnecting) or flashing (pairing) in the mode's colour (Steam white,
-  Xbox green, DS4 blue) when not; a short red flash every 2 s at 5 % battery. Player
+  (reconnecting) or flashing (pairing) in the mode's colour (Steam yellow,
+  Xbox green, DS4 blue, Switch red) when not; a short red flash every 2 s at 5 % battery
+  (Switch mode: Home goes dark for it instead). Player
   LEDs: the player number in the link's colour (Bluetooth blue, USB white,
   receiver purple; all four purple while looking for the receiver), the
   profile number for a moment after a change.

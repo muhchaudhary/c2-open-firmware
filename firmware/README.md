@@ -27,6 +27,8 @@ firmware/
 │   │   ├── gp_xboxbt.c            Xbox One S over Bluetooth: descriptor, reports, rumble
 │   │   ├── gp_ds4_desc.c          DS4: descriptors, reports, feature reports, output parsing (testable)
 │   │   ├── gp_ds4.c               DS4: the host's rumble and lightbar applied
+│   │   ├── gp_switch_desc.c       Switch Pro Controller: descriptors, subcommands, SPI page, reports (testable)
+│   │   ├── gp_switch.c            Switch: the host's rumble and player lights applied
 │   │   ├── gp_config.c            the configuration protocol (docs/config-protocol.md)
 │   │   ├── gp_settings.c          settings table, profiles, records
 │   │   ├── gp_store.c             record store (default: syscfg; boards may replace it)
@@ -143,7 +145,7 @@ product string.
 
 ## Host tests
 
-The hardware-independent code runs on the PC: the SInput / XInput / DS4 /
+The hardware-independent code runs on the PC: the SInput / XInput / DS4 / Switch /
 receiver-link encoders, the settings table and its records, stick and
 trigger shaping, the stick axis and hall trigger drivers, gyro bias
 learning and the battery percent. No SDK or toolchain needed:
@@ -176,7 +178,7 @@ Actions runs them on every push and pull request, with gcc and clang
   command ring has no lock; `gp_bt.c`); USB writes the interrupt endpoint
   from the tick; the receiver link sends `gp_link` messages. Host commands
   go to `sinput_command()` (or the XInput / Xbox / DS4 handlers).
-- **Modes and links**: Steam (SInput), Xbox or DS4; Bluetooth or the receiver.
+- **Modes and links**: Steam (SInput), Xbox, DS4 or Switch; Bluetooth or the receiver.
   Each combination is its own Bluetooth identity, so every host keeps its
   pairing. A cable gives the debug log and charging; Home + Capture tapped
   makes it the gamepad. The combos: the top-level README.

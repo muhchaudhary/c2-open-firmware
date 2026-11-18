@@ -3,7 +3,7 @@
  * active transport whether a host is there and free, and posts at most one
  * report per tick; each transport delivers it in its own way and context
  * and hands the host's output reports to the protocol (sinput_command,
- * xinput_command).
+ * xinput_command, ds4_output, sw_output).
  */
 #ifndef GP_TRANSPORT_H
 #define GP_TRANSPORT_H
@@ -17,6 +17,8 @@ enum gp_protocol {
     GP_PROTO_LINK,                              /* gp_link.h: our own, to the C2 receiver */
     GP_PROTO_DS4,                               /* gp_ds4.h: DualShock 4, USB (report 0x01) */
     GP_PROTO_DS4BT,                             /* gp_ds4.h: DualShock 4, Bluetooth (report 0x11) */
+    GP_PROTO_SWITCH,                            /* gp_switch.h: Switch Pro Controller, USB */
+    GP_PROTO_SWITCHBT,                          /* gp_switch.h: Switch Pro Controller, Bluetooth */
 };
 
 struct gp_transport {

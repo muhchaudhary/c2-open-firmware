@@ -20,8 +20,8 @@ has the pad open:
   SDL reads report 2 only during its init and looks for `02 02` (features)
   there; a `C0` reply in that window is skipped like any other report.
 
-In Xbox and DS4 mode the pad has no SInput reports: use the log port
-(below), or switch to Steam mode (Home + Y held 3 s).
+In Xbox, DS4 and Switch mode the pad has no SInput reports: use the log port
+(below), or switch to Steam mode (Home + A held 3 s).
 
 On Linux the client opens the hidraw node of `2E8A:10C6` (it has a uaccess
 ACL, no root needed) and writes / reads it directly; on Windows and macOS
@@ -41,7 +41,7 @@ and replies travel there as text lines:
 
 The receiver passes the request to the pad over its link and prints the
 pad's reply; with no pad connected it logs `cmd: cfg: no pad connected`.
-Not covered: Xbox or DS4 mode on Bluetooth straight to the computer (no
+Not covered: Xbox, DS4 or Switch mode on Bluetooth straight to the computer (no
 USB at all). Only one program can read a serial port: a running `c2log.py` takes
 the replies. The log drops its oldest lines when it fills, so resend after
 ~400 ms as over Bluetooth. Browsers: WebSerial (Chrome, Edge). Linux: the
@@ -104,7 +104,7 @@ INFO reply payload:
 | 0 | protocol version (3; 2 had no status 6, release or serial port; 1 no calibration) |
 | 1..16 | firmware version: git commit, `+` = built with changes (NUL-padded) |
 | 17..32 | board / Bluetooth name |
-| 33 | input mode: 0 Steam, 1 Xbox, 2 DS4 |
+| 33 | input mode: 0 Steam, 1 Xbox, 2 DS4, 3 Switch |
 | 34 | link: 0 Bluetooth, 1 USB |
 | 35..36 | battery mV |
 | 37 | battery % |
@@ -132,7 +132,7 @@ them, and the player LEDs show the number (purple) for a second.
 | Key | Name | Range | Default | |
 |---|---|---|---|---|
 | 1 | `rumble_level` | 0..4 | 4 | rumble strength, 0 off (also M + Up / Down) |
-| 2 | `mode` | 0..2 | 0 | 0 Steam (SInput), 1 Xbox, 2 DS4; restarts on the Bluetooth link and wired, not on the receiver link (also Home + Y / Home + X / Home + B) |
+| 2 | `mode` | 0..3 | 0 | 0 Steam (SInput), 1 Xbox, 2 DS4, 3 Switch; restarts on the Bluetooth link and wired, not on the receiver link (also Home + A / Home + X / Home + B / Home + Y) |
 | 3 | `idle_off_min` | 0..60 | 10 | connected and idle: off after this many minutes, 0 never |
 | 4 | `profile` | 0..3 | 0 | the active profile |
 | 5 | `link` | 0..1 | 0 | 0 Bluetooth, 1 the C2 receiver (its own Bluetooth identity and pairings); restarts (also Home + M held 3 s) |

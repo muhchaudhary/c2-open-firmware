@@ -1,7 +1,9 @@
 # Stock firmware features (from strings)
 
-What GameSir's stock firmware does beyond what our firmware does, as far as
-its text strings, USB descriptors and flash contents show. The point is to
+What GameSir's stock firmware does beyond what our firmware does: first as
+GameSir's manual documents it for the C2 (the next section, the feature
+set to match), then as far as its text strings, USB descriptors and flash
+contents show (shared firmware: more than the C2 ships with). The point is to
 help implement new features (PS4/PS5, Switch / Switch 2, Xbox 360, headset
 audio, EEPROM data, factory tools) in our firmware.
 
@@ -11,6 +13,43 @@ marked. The stock pad firmware also supports board variants that are not ours
 (it has an `lsm6ds3 sensor init start` path; our pad has a QMI8658), so a
 string doesn't prove the hardware exists on our C2. Facts marked *(public)*
 come from public reverse-engineering work, not from these images.
+
+## What GameSir says the C2 does (its manual)
+
+The firmware's strings are from GameSir's shared code base, so they cover
+more than the C2 ships with. What GameSir documents for the Cyclone 2
+([manual](https://gamesir.com/support/manuals/gamesir-cyclone2), read
+2026-11-18) is the feature set to match. The manual contradicts its own FAQ
+in places (noted); combos it doesn't give are marked "not given".
+
+**Platforms.** Windows 10/11 (Bluetooth, the receiver, the cable), Android
+8.0+ (Bluetooth), Switch and Switch 2 (Bluetooth; the cable and the receiver
+once the Switch's *Pro Controller Wired Communication* is on), Steam. **Not
+claimed: PS4 / PS5, Xbox consoles, iOS.** So the PlayStation and Xbox 360
+authentication code below is GameSir's shared firmware, not a C2 feature.
+
+| Stock (manual) | Ours | |
+|---|---|---|
+| **Modes**: XInput (green, Home + X), NS / Switch "Pro Controller" (red, Home + Y), HID / Android (yellow, Home + A, "GameSir-Cyclone 2"); Windows Bluetooth with Home + B (blue, "Wireless Controller") | Steam (yellow, Home + A), Xbox (green, Home + X), DS4 (blue, Home + B, "Wireless Controller"), Switch (red, Home + Y) | The same combos and colours since 0.3.0. Our Home + A is SInput, not stock's HID / Android pad: Android takes our Xbox mode (Xbox One S over Bluetooth). |
+| Hold M: show the mode's colour; View + Menu: cycle the modes | Home's colour shows the mode when not connected | no "show mode" or cycle combo |
+| **Automatic mode detection** on the cable and the receiver; a mode chosen by hand is kept until a power-off | The saved mode, always | missing |
+| Pairing: Home + mode button held 2 s; forced pairing Logo + Share 2 s; Home + Share 2 s after a failed connection | Home + Capture held 3 s (the current mode) | equivalent |
+| **Back buttons programmed on the pad**: M + L4 / R4 held, press the target (one button or a combo), L4 / R4 again; saved after 10 s | remap in the configuration app / protocol only | on-pad programming missing; macros missing (the app has them) |
+| **Turbo on the pad**: M + button cycles 8 / 12 / 20 Hz / off, on A B X Y LB RB LT RT; double-tap M clears all; Home flashes while turbo is on | per-button turbo and one rate per profile, from the app only; no LT / RT turbo | on-pad combos, per-button rates, trigger turbo and the indication missing |
+| **ABXY swap** (A/B and X/Y): M + A held 2 s | by position, no swap | missing (Switch: by label) |
+| **Zero dead zone** per stick: Mode + stick click until it rumbles (Raw ↔ circular) | per-profile dead zone from the app | on-pad toggle missing |
+| Hair trigger: a combo (not given); Home flashes on LT / RT while on | per-profile setting from the app | on-pad toggle missing |
+| Trigger modes: Hall analog, hair trigger, "mouse click"; a long / short travel switch | analog (any position), hair trigger | the C2 has trigger stops; "mouse click" mode missing |
+| Rumble: 5 levels, off / 25 / 50 / 75 (default) / 100 %; combo not given | 5 levels (0..4), M + Up / Down | have (default level to compare) |
+| 4 presets, combo not given | 4 profiles, M + Left / Right | have |
+| **Calibration on the pad**: sticks and triggers View + Menu + Home 2 s, A, turn and press, A; gyro M + Screenshot 3 s (FAQ: 2 s) | from the configuration app / protocol | on-pad combos missing |
+| Function reset (defaults): Home + Menu until the logo blinks (or Logo + Menu 5 s) | the configuration protocol's defaults | on-pad combo missing |
+| Power: Home 5 s off; auto-off 10 min idle connected, 1 min pairing, 3 min reconnecting | the same (pairing 60 s, reconnecting 180 s, idle 10 min by default, settable) | have |
+| Low battery: red flashes twice every 10 s under 15 % | a short red flash every 2 s at 5 % | thresholds differ |
+| Charging off: red / orange / yellow / green by charge, green flash then off when full | stock's own animation (`core/gp_charging.c`) | have |
+| Dock: charges, its LED follows the pad's | yes | have |
+| Lighting from the app (zones, animations) | the host's colour, the mode's colour | missing (plan 5.4) |
+| Firmware update from GameSir Connect (Logo + Menu, plugged in) | `jlflash.sh` | missing (plan 3.4) |
 
 ## Sources and addresses
 

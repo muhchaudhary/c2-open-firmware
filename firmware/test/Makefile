@@ -17,12 +17,13 @@ CFLAGS   += -std=gnu11 -Wall -Wextra -Wno-unused-parameter -Wno-sign-compare -Wn
             -Werror $(SANITIZE) -Ishim -I$(SRC)/core -I$(SRC)/drivers
 LDLIBS   := -lm
 
-TESTS := link sinput xinput ds4 settings tuning stick_axis hall_trigger motion battery
+TESTS := link sinput xinput ds4 switch settings tuning stick_axis hall_trigger motion battery
 
 src_link         := core/gp_link.c
 src_sinput       := core/gp_sinput_desc.c
 src_xinput       := core/gp_xinput_desc.c
 src_ds4          := core/gp_ds4_desc.c
+src_switch       := core/gp_switch_desc.c
 src_settings     := core/gp_settings.c
 src_tuning       := core/gp_tuning.c core/gp_settings.c
 src_stick_axis   := drivers/stick_axis.c

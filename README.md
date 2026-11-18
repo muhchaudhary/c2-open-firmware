@@ -22,6 +22,10 @@ at your own risk.
 - **DS4 mode**: a DualShock 4 over Bluetooth and USB, for PCs
   ([`docs/ds4.md`](docs/ds4.md); not a PS4 console, which needs Sony's
   authentication chip). Not tested on hardware yet.
+- **Switch mode**: a Switch Pro Controller over Bluetooth and USB, for the
+  Switch itself and PCs ([`docs/switch.md`](docs/switch.md); no chip
+  needed). Tested on Linux over Bluetooth, USB and the receiver; not yet on
+  a Switch console.
 - **Three ways to connect**, in any mode: Bluetooth to the computer, a
   USB cable, or the [C2 receiver](docs/dongle.md) running this project's
   receiver firmware.
@@ -54,19 +58,20 @@ at your own risk.
 | Home held 5 s | power off (the LEDs go dark; off on release) |
 | Home + Capture held 3 s | pairing mode |
 | Home + Capture tapped, USB cable in | USB input on / off (the cable alone only charges and gives the debug log) |
-| Home + Y held 3 s | Steam mode (SInput) |
+| Home + A held 3 s | Steam mode (SInput; stock's HID / Android combo) |
 | Home + X held 3 s | Xbox mode |
 | Home + B held 3 s | DS4 mode |
+| Home + Y held 3 s | Switch mode |
 | Home + M held 3 s | link: Bluetooth ↔ the C2 receiver |
 | M + Up / Down | rumble strength (1 s of rumble at the new level) |
 | M + Left / Right | profile (shown on the player LEDs) |
 | Home + Options, USB in, at power-on or held 2 s | USB bootloader (for flashing) |
 
 **LEDs**: Home breathes while reconnecting and flashes in pairing mode, in
-the mode's colour (Steam white, Xbox green, DS4 blue); connected, it takes the host's
-colour. The player LEDs show the player number in the link's colour
+the mode's colour (Steam yellow, Xbox green, DS4 blue, Switch red: stock's combos and colours); connected, it takes the host's
+colour (Switch mode: red). The player LEDs show the player number in the link's colour
 (Bluetooth blue, USB white, receiver purple). A short red flash on Home
-every 2 s: battery at 5 %. With USB in and the controller off: the charging
+every 2 s (Switch mode: a short dark blink): battery at 5 %. With USB in and the controller off: the charging
 animation.
 
 ## Docs
@@ -81,6 +86,7 @@ The firmware:
   protocol
 - [`docs/sinput.md`](docs/sinput.md): SInput as the controller speaks it
 - [`docs/ds4.md`](docs/ds4.md): DS4 mode
+- [`docs/switch.md`](docs/switch.md): Switch mode
 - [`docs/dongle.md`](docs/dongle.md): the C2 receiver
 - [`docs/latency.md`](docs/latency.md): latency measurements
 - [`docs/plan.md`](docs/plan.md): the work plan

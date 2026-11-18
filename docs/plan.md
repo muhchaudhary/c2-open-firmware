@@ -3,7 +3,9 @@
 From a review of `firmware/` on 2026-11-17, checked against the code. Each
 item says where the problem is and what done looks like. Tick the box and add
 the commit when an item lands. Stock's feature set, the reference for what
-is still missing: `docs/gamesir-connect.md` and `docs/stock-features.md`.
+is still missing: `docs/stock-features.md` (first GameSir's manual for the
+C2, "What GameSir says the C2 does", then the firmware's strings) and
+`docs/gamesir-connect.md`.
 
 Order: correctness first (1), then what makes later changes testable (2),
 then features by value for effort (3–5), then housekeeping (6).
@@ -106,6 +108,19 @@ then features by value for effort (3–5), then housekeeping (6).
   hold, delay; loop; recorded on the pad); ABXY swap; d-pad SOCD / diagonal
   lock; a stick as d-pad or mouse.
 
+- [ ] **4.4 On-pad configuration, as stock's manual has it** (2026-11-18,
+  `docs/stock-features.md`): M + L4 / R4 programs a back button (a button
+  or a combo); M + button cycles turbo 8 / 12 / 20 Hz / off, LT / RT
+  included, double-tap M clears, Home flashes while on; M + A swaps ABXY;
+  Mode + stick click toggles a zero dead zone; a hair-trigger toggle;
+  calibration (sticks and triggers, gyro) and function reset from combos.
+  Check each against our combos first (M + d-pad is rumble and profiles).
+- [ ] **4.5 Modes as stock**: hold M to show the mode, automatic mode
+  detection on the cable and the receiver. (Stock's mode combos and
+  colours: done for 0.3.0, Home + A Steam yellow, Home + Y Switch red.)
+- [ ] **4.6 Low battery as stock**: red twice every 10 s under 15 % (ours: a
+  short flash every 2 s at 5 %).
+
 ## 5. Tuning, motion, LEDs, modes
 
 - [ ] **5.1** Square gate and 5-point response curves (sticks, triggers).
@@ -121,7 +136,11 @@ then features by value for effort (3–5), then housekeeping (6).
 - [ ] **5.6** Switch Pro and DS4 modes (stock has both). DS4 on the pad
   (Bluetooth, USB and the receiver, `docs/ds4.md`): tested on Linux
   2026-11-17 (`hid-playstation`, SDL, Steam), Windows 10 through the
-  receiver (DS4Windows). Still open: Switch Pro.
+  receiver (DS4Windows). Switch Pro on the pad (Bluetooth and USB,
+  `docs/switch.md`, Home + Y): tested on Linux 2026-11-18 over Bluetooth,
+  USB and the receiver (SDL: inputs, rumble by band, the gyro's
+  directions). Still open: a Switch console; USB pairing (subcommand
+  0x01) and Switch 2 wake-up.
 
 ## 6. Build and docs
 
