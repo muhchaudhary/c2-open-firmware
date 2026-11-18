@@ -41,6 +41,17 @@
         '';
       };
 
+      # The flasher's engine, fw-re/jlflash.sh drives it: kagaimiq's
+      # jl-uboot-tool (MIT), pinned. Not kept in this repository: it carries
+      # JieLi's USB loader blob, which isn't ours to redistribute. Without Nix:
+      # fw-re/get-uboot-tool.sh (the same commit).
+      jlUbootTool = pkgs: pkgs.fetchFromGitHub {
+        owner = "kagaimiq";
+        repo = "jl-uboot-tool";
+        rev = "adb3f18889e88ac512ce0a3c4d8cc3d3cb30696a";
+        hash = "sha256-YP8QOR1BmfNnC0XwGJIMNa1fI5Ea/ECiu7jyZ8Z0ce0=";
+      };
+
       # Python for the tools: the flasher's (fw-re/jlflash.sh, jl-uboot-tool:
       # pyyaml crcmod pycryptodomex tqdm) and tools/c2led-ui.py's PyGObject.
       jlPython = pkgs: pkgs.python3.withPackages (ps: [
@@ -49,7 +60,7 @@
     in
     {
       packages = forAllSystems (pkgs:
-        { python = jlPython pkgs; }
+        { python = jlPython pkgs; jl-uboot-tool = jlUbootTool pkgs; }
         // nixpkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
           jl-toolchain = jlToolchain pkgs;
         });
@@ -57,6 +68,7 @@
       devShells = forAllSystems (pkgs:
         let
           py = self.packages.${pkgs.stdenv.hostPlatform.system}.python;
+          ut = self.packages.${pkgs.stdenv.hostPlatform.system}.jl-uboot-tool;
           tc = self.packages.${pkgs.stdenv.hostPlatform.system}.jl-toolchain or null;
         in
         {
@@ -83,6 +95,10 @@
               _root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
               if [ -d "$_root/fw-re" ] && { [ -L "$_root/fw-re/.jlpy" ] || [ ! -e "$_root/fw-re/.jlpy" ]; }; then
                 ln -sfn ${py} "$_root/fw-re/.jlpy"
+              fi
+              # fw-re/jl-uboot-tool: the flasher's engine, the same way.
+              if [ -d "$_root/fw-re" ] && { [ -L "$_root/fw-re/jl-uboot-tool" ] || [ ! -e "$_root/fw-re/jl-uboot-tool" ]; }; then
+                ln -sfn ${ut} "$_root/fw-re/jl-uboot-tool"
               fi
               unset _root
             '';
