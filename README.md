@@ -98,6 +98,8 @@ The stock firmware, for reference:
   their strings (PS4/PS5, Switch, audio, EEPROM, test modes, VM map)
 - [`docs/gamesir-connect.md`](docs/gamesir-connect.md): what GameSir's app
   does with a C2
+- [`docs/reverse-engineering.md`](docs/reverse-engineering.md): how to dump,
+  decrypt, disassemble and trace the stock firmware from your own controller
 
 ## Layout
 
@@ -110,6 +112,7 @@ The stock firmware, for reference:
 │   ├── jlflash.sh              Linux flasher (sudo, /dev/sg)
 │   ├── enter_bootloader.py     GameSir's HID command → USB bootloader
 │   ├── mkufw.py  jl.py  flash.py  ufw.py    image tools (the builder is firmware/mkimage.py)
+│   ├── mkelf.py                wraps a stock app.bin in an ELF for objdump (docs/reverse-engineering.md)
 │   ├── get-toolchain.sh        the JieLi toolchain, hash-checked (without Nix; the dev shell has it)
 │   ├── sdk/                    reverse-engineering tools (sdkmatch, pin and register scans)
 │   └── get-uboot-tool.sh       the flasher's engine, kagaimiq's jl-uboot-tool (MIT), pinned (without Nix)
