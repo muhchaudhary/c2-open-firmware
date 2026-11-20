@@ -155,6 +155,14 @@ fully means restoring that area too; `tools/c2eeprom.py` reads the EEPROM
 through the debug log. After changing firmware, remove the controller from
 the computer's Bluetooth (`bluetoothctl remove <mac>`) and pair again.
 
+## Thanks
+
+- [Hand Held Legend](https://handheldlegend.com), for
+  [SInput](https://docs.handheldlegend.com/s/sinput), the protocol Steam
+  mode speaks. We built it from their documentation, and because SDL and
+  Steam support SInput, the pad gets gyro, paddles and rumble natively, with
+  no driver of its own ([`docs/sinput.md`](docs/sinput.md)).
+
 ## Licence
 
 Apache-2.0 (`LICENSE`). The images also contain JieLi's SDK (Apache-2.0)
