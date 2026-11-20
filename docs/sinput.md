@@ -9,6 +9,16 @@ receiver (which rebuilds them from its link, `docs/dongle.md`). Encoder:
 SDL matches VID/PID only, sends the features request and drops the device
 if no reply arrives within ~100 ms (§2.7).
 
+SInput is [Hand Held Legend](https://handheldlegend.com)'s protocol, and
+Steam mode is built on it. Their documentation
+([docs.handheldlegend.com/s/sinput](https://docs.handheldlegend.com/s/sinput))
+is where the state report layout (§2.1), the features reply (§2.4) and the
+command set (§2.5) come from. This file records how the C2 implements
+them, plus what we found on hardware and in SDL's driver. Thanks to Hand
+Held Legend for designing SInput, getting it into SDL and Steam, and
+documenting it openly: it gave this controller a native protocol, with gyro,
+paddles and rumble, with no driver of our own.
+
 ## 1. The LED chain
 
 From the stock code, confirmed on hardware: the 8 slots form one chain of
@@ -166,6 +176,18 @@ is never replaced by a state report.
 - **SDL**: `SDL_SetGamepadPlayerIndex` 0..3 lights 1..4 player LEDs. While
   `03 80` with `F` ≠ 0 owns the player LEDs, a `03 03` is kept and shows
   once `03 04` or `03 80` with `F` = 0 hands them back.
+- **Games with SDL older than 3.4** (SDL2, SDL 3.2) have no SInput driver
+  and see only the kernel's generic HID device: buttons scrambled (the
+  descriptor's buttons are numbered in SInput's bit order, so D-pad Up is
+  `BTN_Y`, RB `BTN_START` …), no gyro, no rumble. Steam Input hides this,
+  since Steam's own SDL is new enough; it shows with Steam Input off. Steam's
+  default Linux runtime carries SDL 3.2.22 (2026-11-20), so a game that
+  prefers the runtime's SDL3 over its own SDL2 still gets one without
+  SInput; seen in gaming mode, while the desktop (system SDL 3.4) worked.
+  Fixes: the game's compatibility tool set to **Steam Linux Runtime 4**
+  (SDL 3.4.18), Steam Input on, or DS4 mode (every SDL has a PS4 driver).
+  To see which SDL a game loaded: `grep SDL /proc/<pid>/maps`; SInput
+  opens `/dev/hidraw*`, the generic path `/dev/input/event*`.
 - **BlueZ** caches the SDP record and descriptor: after a change to either,
   `bluetoothctl remove <mac>` and pair again.
 - Watching the host's commands live (BlueZ 5.87 prefixes outgoing lines
