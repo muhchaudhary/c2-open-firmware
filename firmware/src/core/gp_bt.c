@@ -137,6 +137,7 @@ static volatile u8 gp_acl_up;           /* ACL link up (HCI events) */
 static u8 gp_pairing_on;
 static u8 gp_suspended;                /* wired: Bluetooth stays out of the way */
 static u8 gp_recover_reconnect;         /* we dropped the link to recover: reconnect */
+static volatile u32 gp_rx_page_since;   /* receiver link: jiffies_msec of our page out | 1, 0: none */
 u32 gp_bt_sent;
 volatile int gp_hid_send_err;
 volatile u32 gp_hid_send_errs;
@@ -275,7 +276,9 @@ void gp_bt_after_init(void)
         set_bt_vm_interface(SWITCH_BOND_VM, bt_vm_interface()); /* Switch mode's own bonds */
     }
     btstack_edr_start_after_init(0);
-    if (!bt_connect_phone_back_start()) {
+    if (bt_connect_phone_back_start()) {
+        gp_rx_page_since = jiffies_msec() | 1;
+    } else {
         bt_wait_phone_connect_control(1);
     }
 }
@@ -538,6 +541,9 @@ static void gp_bt_send_posted(void)
 static void gp_bt_hci_event(struct bt_event *bt)
 {
     gp_log("bt: hci event %x %x", bt->event, bt->value);
+    if (bt->event == HCI_EVENT_CONNECTION_COMPLETE) {
+        gp_rx_page_since = 0;                            /* our page (or the receiver's) has its result */
+    }
     if (bt->event == HCI_EVENT_CONNECTION_COMPLETE && bt->value == ERROR_CODE_SUCCESS) {
         gp_acl_up = 1;
     } else if (bt->event == HCI_EVENT_DISCONNECTION_COMPLETE ||
@@ -614,7 +620,9 @@ void gp_bt_suspend(int on)
             gp_bt_disconnect();
         }
         gp_bt_scan_off();
-    } else if (!bt_connect_phone_back_start()) {
+    } else if (bt_connect_phone_back_start()) {
+        gp_rx_page_since = jiffies_msec() | 1;
+    } else {
         bt_wait_phone_connect_control(1);
     }
 }
@@ -728,6 +736,40 @@ void gp_bt_pairing_start(void)
     bt_wait_phone_connect_control(1);
 }
 
+/* Receiver link: the pad reconnects, the receiver only listens (dg_bt.c).
+ * Every reconnect the receiver started (it paged the pad) failed at
+ * authentication with "PIN or Key Missing" (0x06); every one the pad
+ * started worked (receiver log, 2026-11-24). And after that failure the
+ * SDK's handler left the pad waiting to be connected, never paging again,
+ * while the receiver kept paging and failing: the pad never came back. So
+ * while not connected the pad pages its receiver itself, RECEIVER_PAGE_MS
+ * after each page's result (page timeout 8000 slots = 5 s), until it
+ * connects or powers off ("no host"). A page with no result in
+ * RECEIVER_PAGE_STUCK_MS is taken as over. */
+#define RECEIVER_PAGE_MS        2000
+#define RECEIVER_PAGE_STUCK_MS  15000
+
+static void gp_bt_receiver_page(u8 connected)
+{
+    static u16 idle_ms;
+    if (!gp_bt_receiver() || connected || gp_bt_link_up() || gp_pairing_on || gp_power_off_pending()) {
+        idle_ms = 0;
+        return;
+    }
+    u32 since = gp_rx_page_since;
+    if (since && jiffies_msec() - since < RECEIVER_PAGE_STUCK_MS) {
+        return;                                          /* a page is out: its result first */
+    }
+    gp_rx_page_since = 0;
+    if ((idle_ms += GP_POLL_MS) < RECEIVER_PAGE_MS) {
+        return;
+    }
+    idle_ms = 0;
+    if (bt_connect_phone_back_start()) {                 /* 0: no bond (not paired yet) */
+        gp_rx_page_since = jiffies_msec() | 1;
+    }
+}
+
 void gp_bt_poll(u8 connected)
 {
     static u8 was_connected;
@@ -745,4 +787,5 @@ void gp_bt_poll(u8 connected)
     was_connected = connected;
     gp_bt_hid_retry(connected);
     gp_bt_tx_watch(connected);
+    gp_bt_receiver_page(connected);
 }
