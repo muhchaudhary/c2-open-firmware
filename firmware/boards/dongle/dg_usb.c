@@ -158,18 +158,25 @@ static u32 dg_state_t;                      /* when the state slot was filled */
 static u32 dg_full_since;                   /* the IN endpoint has held a packet since (dg_us), 0: free */
 volatile u32 dg_usb_flushed, dg_usb_resetups;
 static u8 dg_flush_run;                     /* stale flushes in a row */
-/* The host isn't reading the IN endpoint: packets go stale and are flushed.
- * Linux reads it only once something opens the gamepad (Steam, SDL, a
- * hidraw reader), so the battery report (0x04) went out unread, counted as
- * sent, and the next came a minute later: the battery read "No data" for up
- * to a minute after the gamepad was opened (2026-11-24). Marking the flushed
- * packet as the battery didn't help (the endpoint seems to take a packet into
- * a second buffer: it looked collected, then was flushed). So: the first
- * packet collected after a flush means the host has started reading, and the
- * battery is due again (sent with the pad's next status, within 1 s). A
- * false start only sends it again. */
-static u8 dg_flushed;                       /* the endpoint is free because we flushed it */
-static u8 dg_host_idle = 1;                 /* packets went unread since the host last read one */
+/* Any packet flushed unread makes the battery report (0x04) due again.
+ * Linux reads the IN endpoint only while something has the gamepad open
+ * (Steam, SDL, a hidraw reader); the battery report sent at the connect
+ * went unread, counted as sent, and the next came a minute later: the
+ * battery read "No data" for up to a minute after the gamepad was opened
+ * (2026-11-24). Re-arming only when the battery itself was flushed, or
+ * when the host seemed to start reading again, still missed now and then
+ * (the endpoint looks to take a packet into a second buffer, so what was
+ * collected and what flushed isn't certain). So while nothing reads, the
+ * battery goes out with every status from the pad (1 s), unread; once
+ * something opens the gamepad the next one is read, within a second. While
+ * the host reads, nothing is flushed: once a minute and on a change.
+ * And the first packet collected after a flush re-arms it once more: with
+ * flushing alone the battery still came a minute late in 2 of 5 opens, as
+ * if the first packet the host collected never reached it (a data toggle
+ * out of step after the flushes would do that); the battery then goes out
+ * again with the next status. */
+static u8 dg_in_pending;                    /* a packet we wrote is in the endpoint (not flushed) */
+static u8 dg_rearm_on_read;                 /* flushed since the host last collected one */
 static u32 dg_ready_us;                     /* when the host fetched the report descriptor */
 static u8 *dg_ep_in_dma;
 
@@ -230,11 +237,12 @@ static int dg_usb_in_free(void)
             dg_flush_run = 0;                       /* collected: the endpoint works */
         }
         dg_full_since = 0;
-        if (dg_flushed) {
-            dg_flushed = 0;                         /* free because we flushed it */
-        } else if (dg_host_idle) {
-            dg_host_idle = 0;                       /* a packet collected: the host reads again */
-            sinput_battery_reset();                 /* the battery with the next status (above) */
+        if (dg_in_pending) {                        /* ours, collected */
+            dg_in_pending = 0;
+            if (dg_rearm_on_read) {
+                dg_rearm_on_read = 0;
+                sinput_battery_reset();             /* the host reads again: the battery once more (above) */
+            }
         }
         return 1;
     }
@@ -246,8 +254,9 @@ static int dg_usb_in_free(void)
                         (csr & ~(TXCSRP_TxPktRdy | TXCSRP_UnderRun | TXCSRP_SentStall)) | TXCSRP_FlushFIFO);
         dg_usb_flushed++;
         dg_full_since = 0;
-        dg_flushed = 1;
-        dg_host_idle = 1;
+        sinput_battery_reset();                     /* never read: the battery due again (above) */
+        dg_in_pending = 0;
+        dg_rearm_on_read = 1;
         if (++dg_flush_run >= 3) {
             /* Stale again and again: set the endpoint up afresh (a
              * flush alone didn't bring it back). Also while nothing on the
@@ -284,6 +293,7 @@ static void dg_usb_try_send(void)
     const u8 *buf = have == 2 ? dg_slot_other : have == 3 ? dg_slot_batt : dg_slot_state;
     usb_g_intr_write(dg_usb_id, HID_EP_IN, (u8 *)buf, xinput ? XINPUT_REPORT_LEN : DG_HID_MAXP);
     dg_usb_sent++;
+    dg_in_pending = 1;
     u32 now = dg_us();
     if (have == 1) {
         dg_have_state = 0;
@@ -842,7 +852,6 @@ static void dg_usb_up(int id)
     dg_usb_ready = 0;
     dg_have_state = dg_have_other = dg_have_batt = 0;
     sinput_battery_reset();                     /* the new host gets the battery with the next status */
-    dg_host_idle = 1;                           /* (and again once it starts reading) */
     dg_sw_reset();                              /* Switch: the new host's handshake */
     gp_log("usb: host on the cable: %s + log", dg_proto_name(dg_usb_proto));
     usb_device_mode(id, HID_CLASS | CDC_CLASS);
