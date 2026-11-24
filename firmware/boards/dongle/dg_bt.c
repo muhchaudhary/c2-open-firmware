@@ -34,6 +34,7 @@ extern void bt_pll_para(u32 osc, u32 sys, u8 low_power, u8 xosc);
 extern void bt_set_mac_addr(u8 *addr);
 extern int hid_diy_set_sendbuf_size(u16 size);
 extern unsigned long jiffies_msec(void);
+extern void get_random_number(u8 *ptr, u8 len);                    /* system/user_cfg.h */
 extern int edr_hid_data_send_ext(u8 report_type, u8 report_id, u8 *data, u16 len);
 
 /* The library wants a HID descriptor for its own (device) record; the
