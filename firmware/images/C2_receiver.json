@@ -1,11 +1,11 @@
 {
   "board": "dongle",
-  "release": "0.3.0",
-  "commit": "c81aafa72d",
+  "release": "0.3.1",
+  "commit": "cd993b61ae",
   "sdk_commit": "fdc018de81629e21e594d677cf05f87d288be0f0",
   "toolchain": "p7wxhmzj76pb4whp94nz8pbqiqclmkjw-jieli-toolchain-20260730.1",
   "image": "dongle.flash.bin",
   "image_bytes": 196608,
-  "app_bytes": 192712,
-  "sha256": "1db68b0b731b3e001dee38f326055076def984f9a56a3b344b0b62169f0c9712"
+  "app_bytes": 192744,
+  "sha256": "a2aa95957af961f42f5ba78f215ec2b82353278fb2d698082d56f1680acab439"
 }

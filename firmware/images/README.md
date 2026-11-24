@@ -13,8 +13,8 @@ header stay on the chip (`docs/dongle.md`).
 
 | Image | Device | Release | Built from | sha256 |
 |---|---|---|---|---|
-| `C2_pad.flash.bin` | the Cyclone 2 | 0.3.0 | `c81aafa72d` | `eb7cc04fb12d6f3fcf271c3ad677dec8fc63f7443d0af11d2ebee8260c91987c` |
-| `C2_receiver.flash.bin` | the C2 receiver: its app area only | 0.3.0 | `c81aafa72d` | `1db68b0b731b3e001dee38f326055076def984f9a56a3b344b0b62169f0c9712` |
+| `C2_pad.flash.bin` | the Cyclone 2 | 0.3.1 | `caf9be132c` | `750b12f870f2b05a6f07b4d5c3fee9027ed68de2130aa2297f87f214332ef9c8` |
+| `C2_receiver.flash.bin` | the C2 receiver: its app area only | 0.3.1 | `cd993b61ae` | `a2aa95957af961f42f5ba78f215ec2b82353278fb2d698082d56f1680acab439` |
 
 Earlier releases (0.2.1 and before) were built before this repository was
 published and aren't here. Building from source: `firmware/README.md`.
@@ -51,7 +51,7 @@ What each image added, newest first; "tested" means on the pad or receiver.
   started always failed with "PIN or Key Missing", and the pad then
   forgot its pairing.) Tested with two receivers and two pads:
   power-cycled several times each, and a receiver plugged in after its
-  pad was on.
+  pad was on; the release image on both pads (INFO 0.3.1).
 - **0.3.0** (2026-11-18): Switch mode (Home + Y held 3 s, Home red): a
   Switch Pro Controller `057E:2009` over Bluetooth ("Pro Controller", its
   own address and pairings) and USB ("Nintendo Co., Ltd. Pro Controller")
@@ -132,7 +132,10 @@ What each image added, newest first; "tested" means on the pad or receiver.
   receiver had the same one, `01:64:7E:5B:00:B2`, so with two receivers a
   pad could reach the wrong one): **pads paired before must pair once
   more.** On Linux the battery shows within a second of the gamepad being
-  opened (was up to a minute). Tested with two receivers and two pads.
+  opened (was up to a minute). Tested with two receivers and two pads;
+  the release image on both receivers: each its own address kept across
+  restarts, both pads back by themselves in ~9 s, and the battery within
+  0.9 s of opening the gamepad in 26 of 26 tries.
 - **0.3.0** (2026-11-18): with the pad in Switch mode, a Pro Controller on
   USB (`057E:2009`, bcdDevice 0x0210 to tell it from the pad's cable):
   the receiver answers the handshake and subcommands itself and builds
