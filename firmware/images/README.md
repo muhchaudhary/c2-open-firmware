@@ -45,6 +45,13 @@ What each image added, newest first; "tested" means on the pad or receiver.
 
 ### The pad (`C2_pad.flash.bin`)
 
+- **0.3.1** (2026-11-24): on the receiver link the pad reconnects by
+  itself: while not connected it pages its receiver every 2 s after a
+  failed page, until it connects or powers off. (A reconnect the receiver
+  started always failed with "PIN or Key Missing", and the pad then
+  forgot its pairing.) Tested with two receivers and two pads:
+  power-cycled several times each, and a receiver plugged in after its
+  pad was on.
 - **0.3.0** (2026-11-18): Switch mode (Home + Y held 3 s, Home red): a
   Switch Pro Controller `057E:2009` over Bluetooth ("Pro Controller", its
   own address and pairings) and USB ("Nintendo Co., Ltd. Pro Controller")
@@ -118,6 +125,14 @@ What each image added, newest first; "tested" means on the pad or receiver.
 
 ### The receiver (`C2_receiver.flash.bin`)
 
+- **0.3.1** (2026-11-24): pads reconnect after being switched off. The
+  receiver no longer pages its pad (that always failed authentication and
+  made the pad forget the pairing); it waits for the pad's own page. Each
+  receiver now makes its own Bluetooth address on first start (every
+  receiver had the same one, `01:64:7E:5B:00:B2`, so with two receivers a
+  pad could reach the wrong one): **pads paired before must pair once
+  more.** On Linux the battery shows within a second of the gamepad being
+  opened (was up to a minute). Tested with two receivers and two pads.
 - **0.3.0** (2026-11-18): with the pad in Switch mode, a Pro Controller on
   USB (`057E:2009`, bcdDevice 0x0210 to tell it from the pad's cable):
   the receiver answers the handshake and subcommands itself and builds
