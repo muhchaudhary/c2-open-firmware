@@ -169,7 +169,14 @@ static u8 dg_flush_run;                     /* stale flushes in a row */
  * collected and what flushed isn't certain). So while nothing reads, the
  * battery goes out with every status from the pad (1 s), unread; once
  * something opens the gamepad the next one is read, within a second. While
- * the host reads, nothing is flushed: once a minute and on a change. */
+ * the host reads, nothing is flushed: once a minute and on a change.
+ * And the first packet collected after a flush re-arms it once more: with
+ * flushing alone the battery still came a minute late in 2 of 5 opens, as
+ * if the first packet the host collected never reached it (a data toggle
+ * out of step after the flushes would do that); the battery then goes out
+ * again with the next status. */
+static u8 dg_in_pending;                    /* a packet we wrote is in the endpoint (not flushed) */
+static u8 dg_rearm_on_read;                 /* flushed since the host last collected one */
 static u32 dg_ready_us;                     /* when the host fetched the report descriptor */
 static u8 *dg_ep_in_dma;
 
@@ -230,6 +237,13 @@ static int dg_usb_in_free(void)
             dg_flush_run = 0;                       /* collected: the endpoint works */
         }
         dg_full_since = 0;
+        if (dg_in_pending) {                        /* ours, collected */
+            dg_in_pending = 0;
+            if (dg_rearm_on_read) {
+                dg_rearm_on_read = 0;
+                sinput_battery_reset();             /* the host reads again: the battery once more (above) */
+            }
+        }
         return 1;
     }
     u32 now = dg_us();
@@ -241,6 +255,8 @@ static int dg_usb_in_free(void)
         dg_usb_flushed++;
         dg_full_since = 0;
         sinput_battery_reset();                     /* never read: the battery due again (above) */
+        dg_in_pending = 0;
+        dg_rearm_on_read = 1;
         if (++dg_flush_run >= 3) {
             /* Stale again and again: set the endpoint up afresh (a
              * flush alone didn't bring it back). Also while nothing on the
@@ -277,6 +293,7 @@ static void dg_usb_try_send(void)
     const u8 *buf = have == 2 ? dg_slot_other : have == 3 ? dg_slot_batt : dg_slot_state;
     usb_g_intr_write(dg_usb_id, HID_EP_IN, (u8 *)buf, xinput ? XINPUT_REPORT_LEN : DG_HID_MAXP);
     dg_usb_sent++;
+    dg_in_pending = 1;
     u32 now = dg_us();
     if (have == 1) {
         dg_have_state = 0;
