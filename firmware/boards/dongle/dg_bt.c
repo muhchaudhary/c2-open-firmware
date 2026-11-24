@@ -34,6 +34,7 @@ extern void bt_pll_para(u32 osc, u32 sys, u8 low_power, u8 xosc);
 extern void bt_set_mac_addr(u8 *addr);
 extern int hid_diy_set_sendbuf_size(u16 size);
 extern unsigned long jiffies_msec(void);
+extern void get_random_number(u8 *ptr, u8 len);                    /* system/user_cfg.h */
 extern int edr_hid_data_send_ext(u8 report_type, u8 report_id, u8 *data, u16 len);
 
 /* The library wants a HID descriptor for its own (device) record; the
@@ -227,11 +228,12 @@ static void dg_bt_output_poll(void *priv)
 }
 
 /* ---- Reconnection and pairing --------------------------------------------
- * Reconnection: at start-up the library pages the bonded pad
- * (bt_connect_phone_back_start: the last device in its bond list); while
- * not connected the receiver stays connectable (a pad that pages its host
- * gets in) and pages the bonded pad again every DG_RECONNECT_MS (a pad that
- * waits instead). The SDK's own handlers try once, a host's job.
+ * Reconnection is the pad's job: the receiver stays connectable and never
+ * pages its bonded pad. Every reconnect the receiver started failed at
+ * authentication with "PIN or Key Missing" (0x06), and left the pad
+ * waiting instead of paging; every one the pad started worked (2026-11-24).
+ * The pad pages its receiver until it connects (gp_bt.c,
+ * gp_bt_receiver_page); a receiver busy paging would only miss its pages.
  * Pairing (dg_bt_pair_start: the button, or `bt pair`): drop the link, stop
  * scanning, inquiry ~10 s; the first pad found on its receiver link (the
  * name DG_PAD_LINK_NAME, the pad's gp_bt.c: its own identity for us, so a
@@ -248,9 +250,8 @@ static void dg_bt_connectable(void)
     bt_wait_phone_connect_control(1);
     user_send_cmd_prepare(USER_CTRL_WRITE_SCAN_DISABLE, 0, NULL);
 }
-#define DG_RECONNECT_MS     5000
 
-/* A page that never ends. After a Connection Timeout (0x08) the SDK's
+/* A page that never ends (pairing's connect, `bt connect`). After a Connection Timeout (0x08) the SDK's
  * handler paged again at once and the library then sat "paging" with no
  * result: no page, no page scan (the pad's own page unanswered), our
  * retries ignored, until a restart (2026-11-14). Failed connections are
@@ -275,7 +276,6 @@ static void dg_bt_paging(void)
 #define DG_PAIR_TIMEOUT_MS  15000           /* pairing ends by itself, whatever the library says */
 
 extern void inquiry_result_handle_register(void (*handle)(char *name, u8 name_len, u8 *addr, u32 dev_class, char rssi));
-extern int bt_connect_phone_back_start(void);
 
 static volatile u8 dg_acl;                  /* ACL link up */
 static volatile u8 dg_hid;                  /* HID channels up (reports arriving) */
@@ -333,10 +333,10 @@ static void dg_bt_pair_end(const char *why)
     }
 }
 
-/* App task, every 100 ms: pairing's next step, and reconnecting. */
+/* App task, every 100 ms: pairing's next step, and a page that never ends. */
 static void dg_bt_poll(void *priv)
 {
-    static u16 idle_ms, pair_ms;
+    static u16 pair_ms;
     if (!dg_pairing) {
         pair_ms = 0;
     } else if ((pair_ms += 100) >= DG_PAIR_TIMEOUT_MS) {
@@ -352,7 +352,6 @@ static void dg_bt_poll(void *priv)
         user_send_cmd_prepare(USER_CTRL_START_CONNEC_VIA_ADDR, 6, dg_found_addr);
         dg_bt_paging();
         dg_bt_pair_end("pad found");
-        idle_ms = 0;
         return;
     }
     if (dg_acl) {
@@ -360,7 +359,6 @@ static void dg_bt_poll(void *priv)
         dg_page_stuck = 0;
     }
     if (dg_pairing || dg_acl) {
-        idle_ms = 0;
         return;
     }
     u32 since = dg_page_since;
@@ -378,39 +376,52 @@ static void dg_bt_poll(void *priv)
         gp_log("bt: the page never ended (%u s): cancelling it, connectable again", DG_PAGE_STUCK_MS / 1000);
         user_send_cmd_prepare(USER_CTRL_PAGE_CANCEL, 0, NULL);
         dg_bt_connectable();
-        idle_ms = 0;
-        return;
-    }
-    idle_ms += 100;
-    if (idle_ms >= DG_RECONNECT_MS) {
-        idle_ms = 0;
-        if (bt_connect_phone_back_start()) {
-            dg_bt_paging();
-        } else {
-            dg_bt_connectable();                     /* no bond yet: just stay connectable */
-        }
     }
 }
 
 /* ---- Start-up and events ------------------------------------------------- */
+/* The receiver's own address. The one in its configuration (BTIF) is not
+ * its own: two receivers both had 01:64:7E:5B:00:B2 (2026-11-24), so a pad
+ * paging its receiver could reach the other one, fail authentication
+ * ("PIN or Key Missing"), and its library then forgot the pairing: the pad
+ * never came back. So each receiver makes one up the first time it starts
+ * (the configured address's company part, a random device part) and keeps
+ * it in DG_ADDR_ID. Library order: least significant byte first, so bytes
+ * 0..2 are the LAP; 0x9E8B00..0x9E8B3F are reserved (inquiry access codes). */
+#define DG_ADDR_ID          48                  /* syscfg user id (apps/hid uses up to 47; dg_usb.c 49) */
+#define DG_ADDR_MAGIC       0xAD
+
+static void dg_bt_own_addr(void)
+{
+    u8 r[7];
+    if (syscfg_read(DG_ADDR_ID, r, sizeof(r)) == sizeof(r) && r[0] == DG_ADDR_MAGIC) {
+        bt_set_mac_addr(r + 1);
+        return;
+    }
+    const u8 *cfg = bt_get_mac_addr();
+    int ff = 1, zero = 1;
+    for (int i = 0; i < 6; i++) {
+        ff &= cfg[i] == 0xff;
+        zero &= cfg[i] == 0x00;
+    }
+    static const u8 nap_uap[3] = {0x0D, 0xC2, 0x02};    /* none configured: 02:C2:0D (locally administered) */
+    memcpy(r + 4, ff || zero ? nap_uap : cfg + 3, 3);
+    u32 lap;
+    do {
+        get_random_number(r + 1, 3);
+        r[1] ^= (u8)jiffies_msec();
+        lap = r[1] | r[2] << 8 | (u32)r[3] << 16;
+    } while (lap >= 0x9E8B00 && lap <= 0x9E8B3F);
+    r[0] = DG_ADDR_MAGIC;
+    syscfg_write(DG_ADDR_ID, r, sizeof(r));
+    bt_set_mac_addr(r + 1);
+    gp_log("bt: made this receiver's own address (pads paired before must pair again)");
+}
+
 void dg_bt_init(void)
 {
     const char *name = "C2 receiver";
-    /* The receiver may have no address of its own in its configuration
-     * (stock generates one: "Generate Self Bt Addr"); all FF / all 00 is
-     * not one. Then a fixed locally administered test address,
-     * 02:C2:0D:00:00:01 (library order: least significant byte first). */
-    const u8 *own = bt_get_mac_addr();
-    int ff = 1, zero = 1;
-    for (int i = 0; i < 6; i++) {
-        ff &= own[i] == 0xff;
-        zero &= own[i] == 0x00;
-    }
-    if (ff || zero) {
-        static u8 test_addr[6] = {0x01, 0x00, 0x00, 0x0D, 0xC2, 0x02};
-        bt_set_mac_addr(test_addr);
-        gp_log("bt: no address configured: using the test address 02:C2:0D:00:00:01");
-    }
+    dg_bt_own_addr();
     clk_set("sys", BT_NORMAL_HZ);
     bt_pll_para(TCFG_CLOCK_OSC_HZ, clk_get("sys"), 0, 0);
     btstack_edr_start_before_init(&dg_edr_config, 0);
@@ -444,13 +455,8 @@ int dg_bt_event(struct sys_event *e)
             dg_bt_log_addr("bt: init ok, own address", bt_get_mac_addr());
             hid_diy_set_sendbuf_size(2 + 64);
             btstack_edr_start_after_init(0);
-            if (bt_connect_phone_back_start()) {     /* the bonded pad */
-                dg_bt_paging();
-                gp_log("bt: reconnecting to the bonded pad");
-            } else {
-                gp_log("bt: no bonded pad: connectable (press the button to pair)");
-                dg_bt_connectable();
-            }
+            gp_log("bt: connectable: waiting for the paired pad (press the button to pair a new one)");
+            dg_bt_connectable();
             dg_crumb(9);
             return 1;
         }
@@ -478,8 +484,8 @@ int dg_bt_event(struct sys_event *e)
         if (failed) {
             /* Not the SDK's handler: it pages again at once on a Connection
              * Timeout (that page never ended, see DG_PAGE_STUCK_MS) and makes
-             * us discoverable on a page timeout. Connectable; dg_bt_poll pages
-             * again in DG_RECONNECT_MS. */
+             * us discoverable on a page timeout. Connectable: the pad pages
+             * us. */
             if (!dg_pairing) {
                 dg_bt_connectable();
             }

@@ -15,8 +15,11 @@ our firmware too: it talks to the receiver over its own link protocol.
   "C2 pad (…", replacing its old pairing. A pad on its normal Bluetooth
   identity is never taken, so a PC and the receiver each keep their
   pairing.
-- **Reconnect**: the receiver pages its paired pad at start-up and every
-  5 s while not connected, and stays connectable for the pad's own page.
+- **Reconnect**: the pad's job. The receiver stays connectable and never
+  pages; the pad pages its receiver at start-up and, while not connected,
+  2 s after each failed page, until it connects or powers off. (A reconnect
+  the receiver started always failed with "PIN or Key Missing" and left the
+  pad waiting.)
 - **LED** (PA09): slow blink idle, solid connected, fast blink pairing; dark
   after 30 s with no pad (still reconnecting).
 - **On USB**, by what is connected:
@@ -54,6 +57,16 @@ connections don't go to the SDK's handler: after a Connection Timeout it
 paged once more without page scan on and then ignored retries, so the pad
 could never reconnect. Now a page with no result in 15 s is cancelled and
 the receiver made connectable again; three in a row restart it.
+
+**Its own address.** The address in the receiver's configuration (BTIF) is
+not its own: two receivers both had `01:64:7E:5B:00:B2`. A pad paging its
+receiver then reached the other one, failed authentication ("PIN or Key
+Missing"), and the pad's library forgot the pairing for good. Each receiver
+now makes up its own address the first time it starts (the configured
+company part, a random device part) and keeps it in VM (syscfg id 48), so
+pads paired before that must pair once more. The
+receiver pages only to pair (and on `bt connect`): reconnecting is the
+pad's (`gp_bt_receiver_page`).
 
 **The link protocol** (`core/gp_link.h`, `dg_link.c`). On the HID interrupt
 channel, pad → receiver:
