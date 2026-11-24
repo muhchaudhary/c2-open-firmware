@@ -158,6 +158,18 @@ static u32 dg_state_t;                      /* when the state slot was filled */
 static u32 dg_full_since;                   /* the IN endpoint has held a packet since (dg_us), 0: free */
 volatile u32 dg_usb_flushed, dg_usb_resetups;
 static u8 dg_flush_run;                     /* stale flushes in a row */
+/* The host isn't reading the IN endpoint: packets go stale and are flushed.
+ * Linux reads it only once something opens the gamepad (Steam, SDL, a
+ * hidraw reader), so the battery report (0x04) went out unread, counted as
+ * sent, and the next came a minute later: the battery read "No data" for up
+ * to a minute after the gamepad was opened (2026-11-24). Marking the flushed
+ * packet as the battery didn't help (the endpoint seems to take a packet into
+ * a second buffer: it looked collected, then was flushed). So: the first
+ * packet collected after a flush means the host has started reading, and the
+ * battery is due again (sent with the pad's next status, within 1 s). A
+ * false start only sends it again. */
+static u8 dg_flushed;                       /* the endpoint is free because we flushed it */
+static u8 dg_host_idle = 1;                 /* packets went unread since the host last read one */
 static u32 dg_ready_us;                     /* when the host fetched the report descriptor */
 static u8 *dg_ep_in_dma;
 
@@ -218,6 +230,12 @@ static int dg_usb_in_free(void)
             dg_flush_run = 0;                       /* collected: the endpoint works */
         }
         dg_full_since = 0;
+        if (dg_flushed) {
+            dg_flushed = 0;                         /* free because we flushed it */
+        } else if (dg_host_idle) {
+            dg_host_idle = 0;                       /* a packet collected: the host reads again */
+            sinput_battery_reset();                 /* the battery with the next status (above) */
+        }
         return 1;
     }
     u32 now = dg_us();
@@ -228,6 +246,8 @@ static int dg_usb_in_free(void)
                         (csr & ~(TXCSRP_TxPktRdy | TXCSRP_UnderRun | TXCSRP_SentStall)) | TXCSRP_FlushFIFO);
         dg_usb_flushed++;
         dg_full_since = 0;
+        dg_flushed = 1;
+        dg_host_idle = 1;
         if (++dg_flush_run >= 3) {
             /* Stale again and again: set the endpoint up afresh (a
              * flush alone didn't bring it back). Also while nothing on the
@@ -822,6 +842,7 @@ static void dg_usb_up(int id)
     dg_usb_ready = 0;
     dg_have_state = dg_have_other = dg_have_batt = 0;
     sinput_battery_reset();                     /* the new host gets the battery with the next status */
+    dg_host_idle = 1;                           /* (and again once it starts reading) */
     dg_sw_reset();                              /* Switch: the new host's handshake */
     gp_log("usb: host on the cable: %s + log", dg_proto_name(dg_usb_proto));
     usb_device_mode(id, HID_CLASS | CDC_CLASS);
