@@ -14,6 +14,10 @@
 #                                          (raw flash image that passes mkufw.py verify;
 #                                          not in the bootloader yet: enters it on the
 #                                          device the image is for, pad or receiver)
+#   sudo ./jlflash.sh write-all FLASH.bin  write FLASH.bin to every pad or receiver plugged in
+#                                          (the kind the image is for), one after another:
+#                                          each into its bootloader by its debug log, written,
+#                                          verified, reset; told apart by USB port      [RISK]
 #   sudo ./jlflash.sh verify FLASH.bin     read back and compare with FLASH.bin  [SAFE]
 #   sudo ./jlflash.sh restore FULL.bin     write a whole-chip backup of the receiver at 0  [RISK]
 #   sudo ./jlflash.sh reset                reset the chip (boot the firmware)
@@ -196,6 +200,21 @@ enter_bl(){  # [pad|receiver]: that device into the bootloader (no target: the o
   set -e; }
 image_target(){  # the device an image (need_image ran) is for
   [ "$IMG_NAME" = "$DONGLE_NAME" ] && echo receiver || echo pad; }
+write_sg(){  # SG: check the chip, write IMG, read it back; reset on a match. 0: written and verified
+  local rc=0 tmp
+  check_target "$1" "${CHK_ADDR:-$IMG_ADDR}" "$IMG_NAME"
+  echo "writing $IMG ($LEN bytes) at $IMG_ADDR ..."; jlt --device "$1" "write $IMG_ADDR $IMG"
+  tmp=$(mktemp); jlt --device "$1" "read $IMG_ADDR $LEN $tmp"
+  if cmp -s "$tmp" "$IMG"; then echo "WRITE VERIFIED -> resetting"; reset_chip "$1" || true; else
+    echo "!!! VERIFY FAILED - NOT resetting. Re-run write (still in bootloader)."; cmp "$tmp" "$IMG" | head; rc=1; fi
+  rm -f "$tmp"; return "$rc"; }
+log_ports(){  # TARGET -> "USBPORT TTY" per debug log port of that kind (USBPORT: its sysfs name, e.g. 1-2)
+  python3 -I -c 'import os, sys; sys.path.insert(0, sys.argv[1]); import c2log
+for tty, k, prod in c2log.find_ports(sys.argv[2]):
+    p = os.path.realpath("/sys/class/tty/%s/device" % os.path.basename(tty))
+    while p != "/" and not os.path.exists(os.path.join(p, "idVendor")):
+        p = os.path.dirname(p)
+    print(os.path.basename(p), tty)' "$HERE/../tools" "$1"; }
 
 case "${1:-}" in
   bind) ensure_sg && echo "sg ready: $(find_sg)" ;;
@@ -211,12 +230,45 @@ case "${1:-}" in
       echo "== $(image_target) image: entering the bootloader on the $(image_target)"; enter_bl "$(image_target)"
     fi
     SG=$(ensure_sg) || { echo "no sg"; exit 1; }
-    check_target "$SG" "${CHK_ADDR:-$IMG_ADDR}" "$IMG_NAME"
-    echo "writing $IMG ($LEN bytes) at $IMG_ADDR ..."; jlt --device "$SG" "write $IMG_ADDR $IMG"
-    tmp=$(mktemp); jlt --device "$SG" "read $IMG_ADDR $LEN $tmp"
-    if cmp -s "$tmp" "$IMG"; then echo "WRITE VERIFIED -> resetting"; reset_chip "$SG" || true; else
-      echo "!!! VERIFY FAILED - NOT resetting. Re-run write (still in bootloader)."; cmp "$tmp" "$IMG" | head; fi
-    rm -f "$tmp" ;;
+    write_sg "$SG" ;;
+  write-all) need_image "${2:-}"; target=$(image_target)
+    if lsusb 2>/dev/null | grep -qi 4c4a; then
+      echo "a device is in the bootloader already: write it alone first (write $2), then write-all"; exit 1; fi
+    mapfile -t usbports < <(log_ports "$target" | awk '{print $1}')
+    [ "${#usbports[@]}" -gt 0 ] || { echo "no $target debug log port found (plugged in, our firmware?)"; exit 1; }
+    echo "== $target image to ${#usbports[@]} ${target}(s), on USB ports: ${usbports[*]}"
+    done_ok=() failed=()
+    for up in "${usbports[@]}"; do
+      echo; echo "=== $target on USB port $up"
+      tty=$(log_ports "$target" | awk -v u="$up" '$1 == u {print $2}')
+      if [ -z "$tty" ]; then echo "its debug log is gone: skipped"; failed+=("$up"); continue; fi
+      echo > /sys/module/usb_storage/parameters/quirks 2>/dev/null || true
+      python3 -I "$HERE/../tools/c2log.py" --boot --device "$tty" || { echo "could not send \"boot\" to $tty"; failed+=("$up"); continue; }
+      echo "waiting for the bootloader on USB port $up ..."
+      jlport=
+      for i in $(seq 1 50); do
+        jlport=$(jl_usb_path 2>/dev/null || true); jlport=${jlport##*/}
+        [ "$jlport" = "$up" ] && break; sleep 0.3
+      done
+      if [ "$jlport" != "$up" ]; then
+        echo "!!! no bootloader on USB port $up (found: '${jlport:-none}'): stopping (nothing written to it)"
+        failed+=("$up"); break; fi
+      echo "bootloader up on $up; binding its storage device ..."
+      ensure_sg >/dev/null 2>&1 || true            # as write's enter_bl: bind first, quietly
+      SG=$(find_sg) || { echo "!!! no sg for USB port $up: stopping"; failed+=("$up"); break; }
+      # Let the kernel finish with the new SCSI device first: on the second
+      # receiver the flasher's first command, the same second as "Attached
+      # scsi generic sg0", got the device reset (error -32) and its USB dead
+      # until replugged (2026-11-24). The single write had seconds of slack.
+      udevadm settle --timeout=10 2>/dev/null || true; sleep 3
+      echo "storage device $SG"
+      if write_sg "$SG"; then done_ok+=("$up"); else failed+=("$up"); break; fi
+      # back in the firmware (its debug log up) before the next: one bootloader at a time
+      echo "waiting for it to come back up ..."
+      for i in $(seq 1 40); do log_ports "$target" | grep -q "^$up " && break; sleep 0.25; done
+    done
+    echo; echo "written: ${done_ok[*]:-none}; failed or not reached: ${failed[*]:-none}"
+    [ "${#failed[@]}" -eq 0 ] ;;
   verify) # read back and diff against a flash.bin:  verify FLASH.bin
     need_image "${2:-}"; SG=$(ensure_sg) || { echo "no sg"; exit 1; }
     tmp=$(mktemp); jlt --device "$SG" "read $IMG_ADDR $LEN $tmp"
