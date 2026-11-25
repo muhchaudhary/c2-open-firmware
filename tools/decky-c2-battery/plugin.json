@@ -1,0 +1,11 @@
+{
+  "name": "C2 Battery",
+  "author": "muhchaudhary",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": ["controller", "battery", "gamesir"],
+    "description": "Shows the battery of controllers on the GameSir C2 receiver (this project's firmware) in Steam's Big Picture header.",
+    "image": ""
+  }
+}

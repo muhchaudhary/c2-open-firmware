@@ -30,3 +30,6 @@ backups/
 fw-re/orig/
 fw-re/refs/
 fw-re/app_v356.bin
+
+# Decky plugin zip (tools/decky-c2-battery/build.sh)
+tools/decky-c2-battery/out/
