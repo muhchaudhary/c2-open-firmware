@@ -41,6 +41,11 @@ script's `--help` (or its header) has the details.
   protocol) to a CSV, for the voltage curve.
 - **`c2batview.py`** + `c2batview.html`: graphs those logs live in the
   browser (`localhost:8765`).
+- **`decky-c2-battery/`**: a Decky Loader plugin that shows the battery of
+  pads on the C2 receiver in Steam's Big Picture header, with the charging
+  bolt; selecting it opens that controller's settings. Steam hides it for
+  these (a wired Xbox-type controller to Steam). `./build.sh` makes the zip
+  for Decky's "Install plugin from ZIP" (its `README.md`).
 
 ## LEDs
 

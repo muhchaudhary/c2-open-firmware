@@ -1,0 +1,7 @@
+{
+  "name": "decky-c2-battery",
+  "version": "0.3.2",
+  "description": "Battery of controllers on the GameSir C2 receiver in Steam's Big Picture header",
+  "type": "module",
+  "license": "Apache-2.0"
+}
