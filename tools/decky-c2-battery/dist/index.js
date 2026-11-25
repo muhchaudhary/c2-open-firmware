@@ -132,8 +132,13 @@ function isHeaderItem(type) {
 
 let origJsx = null;
 
-// Renders Steam's item with the view; renders again when Linux's values
-// change (Steam's item only watches Steam's own fields).
+// Every header controller item goes through here; a receiver's gets the
+// view. Decided when drawing, not when Steam creates the element: a
+// controller that just connected has no USB ID yet when the header first
+// draws it, and Steam's item redraws only when its level or charging
+// changes, so the battery stayed hidden until the header redrew (Home).
+// Drawn again every poll (at most four small items) and when Linux's
+// values change.
 function C2HeaderItem(props) {
   const { c2Item, details, ...rest } = props;
   const [, bump] = React.useReducer((x) => x + 1, 0);
@@ -141,46 +146,76 @@ function C2HeaderItem(props) {
     listeners.add(bump);
     return () => listeners.delete(bump);
   }, []);
-  return origJsx(c2Item, { ...rest, details: view(details) });
+  return origJsx(c2Item, { ...rest, details: isReceiver(details) ? view(details) : details });
 }
 
-let patched = [];
+// The wrapper. Decky starts a reloaded plugin before it stops the old copy
+// (a Steam restart): the old copy putting its saved jsx back took the new
+// copy's wrapper with it, and the battery was gone until a reinstall. So a
+// wrapper carries its owner and Steam's own jsx: installing unwraps any
+// copy of ours first, removing touches only this copy's own, and every
+// poll puts it back if anything took it off.
+const OWNER = Symbol("c2-battery");
 
-function patchJsx() {
-  const mods = DFL.findAllModules(
+function unwrapped(fn) {
+  while (fn && fn.__c2) fn = fn.__c2.orig;
+  return fn;
+}
+
+function wrap(orig) {
+  const w = function (type, props, key) {
+    if (props && props.details && isHeaderItem(type)) {
+      return orig.call(this, C2HeaderItem, { ...props, c2Item: type }, key);
+    }
+    return orig.call(this, type, props, key);
+  };
+  w.__c2 = { orig, owner: OWNER };
+  return w;
+}
+
+function jsxModules() {
+  return DFL.findAllModules(
     (m) => m && typeof m === "object" && typeof m.jsx === "function" && typeof m.jsxs === "function" && m.Fragment !== undefined,
   );
-  for (const m of mods) {
-    const orig = { jsx: m.jsx, jsxs: m.jsxs };
-    if (!origJsx) origJsx = orig.jsx;
-    const wrap = (fn) =>
-      function (type, props, key) {
-        if (props && isReceiver(props.details) && isHeaderItem(type)) {
-          return fn.call(this, C2HeaderItem, { ...props, c2Item: type }, key);
-        }
-        return fn.call(this, type, props, key);
-      };
-    m.jsx = wrap(orig.jsx);
-    m.jsxs = wrap(orig.jsxs);
-    patched.push([m, orig]);
+}
+
+let modules = [];
+
+function ensurePatched() {
+  if (!modules.length) {
+    modules = jsxModules();
+    if (!modules.length) return;
   }
-  if (!mods.length) console.warn("[C2 Battery] React's jsx runtime not found: nothing to do");
+  for (const m of modules) {
+    for (const k of ["jsx", "jsxs"]) {
+      if (m[k].__c2 && m[k].__c2.owner === OWNER) continue;
+      const orig = unwrapped(m[k]);
+      if (!origJsx && k === "jsx") origJsx = orig;
+      m[k] = wrap(orig);
+    }
+  }
 }
 
 function unpatchJsx() {
-  for (const [m, orig] of patched) {
-    m.jsx = orig.jsx;
-    m.jsxs = orig.jsxs;
+  for (const m of modules) {
+    for (const k of ["jsx", "jsxs"]) {
+      if (m[k].__c2 && m[k].__c2.owner === OWNER) m[k] = m[k].__c2.orig;
+    }
   }
-  patched = [];
+  modules = [];
 }
 
 let timer = null;
 
-export default DFL.definePlugin(() => {
-  patchJsx();
+function tick() {
+  ensurePatched();
   poll();
-  timer = setInterval(poll, POLL_MS);
+  listeners.forEach((f) => f());   // redraw: a controller's USB ID may have just arrived
+}
+
+export default DFL.definePlugin(() => {
+  tick();
+  timer = setInterval(tick, POLL_MS);
   return {
     name: "C2 Battery",
     title: React.createElement("div", { className: DFL.staticClasses.Title }, "C2 Battery"),
